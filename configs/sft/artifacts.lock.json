@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "llamafactory": {
+    "commit": "0b7aaf8f6a624bd89a01a155d4265ec861cbdf38",
+    "path": "/home/lyc/REC_PROJECTS/LlamaFactory",
+    "tree": "02158cfe15d2019e3353901d61440b5a320993ab"
+  },
+  "model": {
+    "files": {
+      "config.json": {
+        "sha256": "5fe266426d3f950f5040a9cff724f2250c4a16cb62fac6135be42ed300faebc4",
+        "size": 1366
+      },
+      "model.safetensors": {
+        "sha256": "28e66d2ec528473d335ede2b3faa08eddc53eb8ec93747a449e5e7ec812ede90",
+        "size": 1602902800
+      },
+      "tokenizer.json": {
+        "sha256": "57d45d4a87f16fbb39d9b40f2bc074067b7169e102017eb77e2c77a5060a7b56",
+        "size": 11626335
+      },
+      "tokenizer_config.json": {
+        "sha256": "2e4d6b589e76f81b8b496289c991d7edb67e87f52f794caa41e92e336d4b20cb",
+        "size": 4357825
+      }
+    },
+    "path": "/home/lyc/models/OneReason-0.8B-pretrain-competition"
+  },
+  "source_dataset": {
+    "path": "/home/lyc/Data/HF_kuaishou-llmrec-sft-baseline-0.91/train.jsonl",
+    "records": 32705,
+    "sha256": "4d6b29d76974c9a1517c1b583858e744cae019cb26e1e2d90066e237ebbcf5f8",
+    "size": 242712094
+  },
+  "derived_dataset": {
+    "path": "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/data/hf_baseline_091/train_alpaca.jsonl",
+    "records": 32705,
+    "sha256": "313007f231b464a893314a79f572437c5955994d57c99ef47d9a0d2a7b2bf4fa",
+    "size": 242941029
+  }
+}
