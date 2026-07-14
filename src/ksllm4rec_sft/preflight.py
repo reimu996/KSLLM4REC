@@ -29,7 +29,7 @@ def tokenizer_preflight(
     derived_path: Path,
     report_path: Path,
     *,
-    cutoff_len: int = 32768,
+    cutoff_len: int = 16384,
     artifact_lock: Path | None = None,
 ) -> dict:
     integrity = (

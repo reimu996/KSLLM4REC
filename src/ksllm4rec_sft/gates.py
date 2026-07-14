@@ -15,7 +15,6 @@ REQUIRED_GATES = {
     "gate_02048": 2048,
     "gate_08192": 8192,
     "gate_16384": 16384,
-    "gate_32768": 32768,
 }
 
 
@@ -23,7 +22,7 @@ def verify_gpu_gates(
     log_root: Path,
     report_path: Path,
     project_root: Path,
-    max_reserved_gib: float = 21.5,
+    max_reserved_gib: float = 20.0,
 ) -> dict[str, Any]:
     current_fingerprint = implementation_fingerprint(project_root)
     candidates: dict[str, list[tuple[str, Path, dict[str, Any]]]] = {

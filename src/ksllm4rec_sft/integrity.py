@@ -135,7 +135,10 @@ def verify_environment_lock(lock_path: Path) -> dict[str, Any]:
     actual_prefix = Path(sys.prefix).resolve()
     actual_executable = Path(sys.executable).resolve()
     expected_bin = (EXPECTED_CONDA_PREFIX / "bin").resolve()
-    if actual_prefix != EXPECTED_CONDA_PREFIX or actual_executable.parent != expected_bin:
+    if (
+        actual_prefix != EXPECTED_CONDA_PREFIX
+        or actual_executable.parent != expected_bin
+    ):
         raise RuntimeError(
             "Conda environment mismatch: "
             f"expected prefix {EXPECTED_CONDA_PREFIX}, got prefix {actual_prefix} "

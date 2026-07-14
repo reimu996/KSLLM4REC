@@ -23,7 +23,7 @@ def approved_config() -> dict:
         "dataset": "hf_kuaishou_llmrec_sft_baseline_0_91",
         "dataset_dir": "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/data/hf_baseline_091",
         "template": "qwen3_nothink",
-        "cutoff_len": 32768,
+        "cutoff_len": 16384,
         "packing": True,
         "neat_packing": True,
         "train_on_prompt": False,
@@ -51,7 +51,7 @@ def approved_config() -> dict:
         "lr_scheduler_type": "cosine",
         "warmup_ratio": 0.03,
         "per_device_train_batch_size": 1,
-        "gradient_accumulation_steps": 4,
+        "gradient_accumulation_steps": 8,
         "num_train_epochs": 1.0,
         "max_steps": -1,
         "bf16": True,
@@ -73,11 +73,23 @@ class TrainingContractTest(unittest.TestCase):
             "full_epoch_001",
         )
         self.assertEqual(report["status"], "passed")
+        self.assertEqual(report["requested_cutoff_len"], 16384)
+        self.assertEqual(report["gradient_accumulation_steps"], 8)
 
     def test_rejects_learning_rate_drift(self) -> None:
         config = approved_config()
         config["learning_rate"] = 1.0e-4
         with self.assertRaisesRegex(RuntimeError, "learning_rate"):
+            validate_training_contract(
+                config,
+                {"gamma": 2.0, "item_weight": 3.0, "chunk_size": 512},
+                "full_epoch_001",
+            )
+
+    def test_rejects_the_old_accumulation_value(self) -> None:
+        config = approved_config()
+        config["gradient_accumulation_steps"] = 4
+        with self.assertRaisesRegex(RuntimeError, "gradient_accumulation_steps"):
             validate_training_contract(
                 config,
                 {"gamma": 2.0, "item_weight": 3.0, "chunk_size": 512},

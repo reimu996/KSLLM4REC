@@ -76,7 +76,7 @@ def verify_adapter_files(
     output_dir: Path,
     log_root: Path,
     project_root: Path,
-    max_reserved_gib: float = 21.5,
+    max_reserved_gib: float = 20.0,
 ) -> dict[str, Any]:
     import torch
     from safetensors import safe_open
@@ -200,7 +200,7 @@ def verify_adapter_runtime(
     model_path: Path,
     adapter_path: Path,
     *,
-    min_free_gib: float = 22.0,
+    min_free_gib: float = 20.5,
 ) -> dict[str, Any]:
     import torch
     from peft import PeftModel

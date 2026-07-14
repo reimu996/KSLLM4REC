@@ -27,5 +27,5 @@ export PYTHONPATH="${PROJECT_ROOT}/src:${LLAMAFACTORY_ROOT}/src${PYTHONPATH:+:${
     --report "${RUN_DIR}/verification.json" \
     --artifact-lock "${PROJECT_ROOT}/configs/sft/artifacts.lock.json" \
     --environment-lock "${PROJECT_ROOT}/configs/sft/environment.lock.txt" \
-    --min-free-gib 22.0 \
-    --max-reserved-gib 21.5
+    --min-free-gib 20.5 \
+    --max-reserved-gib 20.0

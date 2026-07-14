@@ -10,6 +10,17 @@ from ksllm4rec_sft.gates import REQUIRED_GATES, verify_gpu_gates
 
 
 class GpuGateValidationTest(unittest.TestCase):
+    def test_requires_exactly_the_four_approved_lengths(self) -> None:
+        self.assertEqual(
+            REQUIRED_GATES,
+            {
+                "gate_00512": 512,
+                "gate_02048": 2048,
+                "gate_08192": 8192,
+                "gate_16384": 16384,
+            },
+        )
+
     def test_accepts_one_valid_manifest_per_required_length(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

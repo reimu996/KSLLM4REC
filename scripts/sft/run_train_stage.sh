@@ -62,8 +62,8 @@ COMMAND=(
     --manifest "${MANIFEST}"
     --stage "${STAGE}"
     --cutoff-len "${CUTOFF_LEN}"
-    --min-free-gib 22.0
-    --max-reserved-gib 21.5
+    --min-free-gib 20.5
+    --max-reserved-gib 20.0
 )
 if [[ "${MAX_STEPS}" != "full" ]]; then
     COMMAND+=(--max-steps "${MAX_STEPS}")

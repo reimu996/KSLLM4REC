@@ -23,7 +23,6 @@ GATE_CUTOFFS = {
     "gate_02048": 2048,
     "gate_08192": 8192,
     "gate_16384": 16384,
-    "gate_32768": 32768,
 }
 FULL_STAGE = "full_epoch_001"
 CONFIG_CHECK_STAGE = "config_check"
@@ -46,7 +45,7 @@ def _same(actual: Any, expected: Any) -> bool:
 
 def _requested_cutoff(run_stage: str) -> int:
     if run_stage in (FULL_STAGE, CONFIG_CHECK_STAGE):
-        return 32768
+        return 16384
     if run_stage in GATE_CUTOFFS:
         return GATE_CUTOFFS[run_stage]
     raise RuntimeError(f"Unapproved SFT run stage: {run_stage!r}")
@@ -103,7 +102,7 @@ def validate_training_contract(
         "lr_scheduler_type": "cosine",
         "warmup_ratio": 0.03,
         "per_device_train_batch_size": 1,
-        "gradient_accumulation_steps": 4,
+        "gradient_accumulation_steps": 8,
         "num_train_epochs": 1.0,
         "max_steps": max_steps,
         "bf16": True,
@@ -145,6 +144,7 @@ def validate_training_contract(
         "run_stage": run_stage,
         "requested_cutoff_len": cutoff,
         "max_steps": max_steps,
+        "gradient_accumulation_steps": 8,
         "target_modules": sorted(TARGET_MODULES),
         "custom_loss": expected_custom,
     }
@@ -189,7 +189,7 @@ def validate_parsed_contract(
         ),
         "gradient_accumulation_steps": (
             training_args.gradient_accumulation_steps,
-            4,
+            8,
         ),
         "world_size": (training_args.world_size, 1),
         "parallel_mode": (str(training_args.parallel_mode), "ParallelMode.DISTRIBUTED"),
@@ -208,6 +208,7 @@ def validate_parsed_contract(
         "status": "passed",
         "internal_cutoff_len": data_args.cutoff_len,
         "packed_sequence_len": data_args.cutoff_len + 1,
+        "gradient_accumulation_steps": training_args.gradient_accumulation_steps,
         "block_diag_attn": model_args.block_diag_attn,
         "parallel_mode": str(training_args.parallel_mode),
     }

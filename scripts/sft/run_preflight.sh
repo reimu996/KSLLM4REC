@@ -15,4 +15,4 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="${PROJECT_ROOT}/src:${LLAMAFACTORY_ROOT}/s
     --data "${DATA}" \
     --report "${REPORT}" \
     --artifact-lock "${PROJECT_ROOT}/configs/sft/artifacts.lock.json" \
-    --cutoff-len 32768
+    --cutoff-len 16384

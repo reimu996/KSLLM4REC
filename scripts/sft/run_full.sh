@@ -12,7 +12,7 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="${PROJECT_ROOT}/src" \
     --log-root "${PROJECT_ROOT}/operation_logs/sft" \
     --report "${PROJECT_ROOT}/artifacts/sft/gates_report.json" \
     --project-root "${PROJECT_ROOT}" \
-    --max-reserved-gib 21.5
+    --max-reserved-gib 20.0
 
-"${SCRIPT_DIR}/run_train_stage.sh" full_epoch_001 32768 full "${FULL_OUTPUT}"
+"${SCRIPT_DIR}/run_train_stage.sh" full_epoch_001 16384 full "${FULL_OUTPUT}"
 "${SCRIPT_DIR}/verify_full.sh"

@@ -19,7 +19,7 @@ pure_bf16: false
 dataset: hf_kuaishou_llmrec_sft_baseline_0_91
 dataset_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/data/hf_baseline_091
 template: qwen3_nothink
-cutoff_len: 32768
+cutoff_len: 16384
 packing: true
 neat_packing: true
 train_on_prompt: false
@@ -54,7 +54,7 @@ warmup_ratio: 0.03
 
 ### train
 per_device_train_batch_size: 1
-gradient_accumulation_steps: 4
+gradient_accumulation_steps: 8
 num_train_epochs: 1.0
 max_steps: -1
 bf16: true

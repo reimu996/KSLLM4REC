@@ -303,7 +303,7 @@ def build_parser() -> argparse.ArgumentParser:
     preflight.add_argument("--model", type=Path, required=True)
     preflight.add_argument("--data", type=Path, required=True)
     preflight.add_argument("--report", type=Path, required=True)
-    preflight.add_argument("--cutoff-len", type=int, default=32768)
+    preflight.add_argument("--cutoff-len", type=int, default=16384)
     preflight.add_argument("--artifact-lock", type=Path, required=True)
     preflight.set_defaults(func=_preflight)
 
@@ -316,8 +316,8 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--stage", required=True)
     train.add_argument("--max-steps", type=int)
     train.add_argument("--cutoff-len", type=int)
-    train.add_argument("--min-free-gib", type=float, default=22.0)
-    train.add_argument("--max-reserved-gib", type=float, default=21.5)
+    train.add_argument("--min-free-gib", type=float, default=20.5)
+    train.add_argument("--max-reserved-gib", type=float, default=20.0)
     train.add_argument("--overwrite-output-dir", action="store_true")
     train.set_defaults(func=_train)
 
@@ -325,7 +325,7 @@ def build_parser() -> argparse.ArgumentParser:
     gates.add_argument("--log-root", type=Path, required=True)
     gates.add_argument("--report", type=Path, required=True)
     gates.add_argument("--project-root", type=Path, required=True)
-    gates.add_argument("--max-reserved-gib", type=float, default=21.5)
+    gates.add_argument("--max-reserved-gib", type=float, default=20.0)
     gates.set_defaults(func=_check_gates)
 
     config_check = subparsers.add_parser("config-check")
@@ -342,8 +342,8 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--report", type=Path, required=True)
     verify.add_argument("--artifact-lock", type=Path, required=True)
     verify.add_argument("--environment-lock", type=Path, required=True)
-    verify.add_argument("--min-free-gib", type=float, default=22.0)
-    verify.add_argument("--max-reserved-gib", type=float, default=21.5)
+    verify.add_argument("--min-free-gib", type=float, default=20.5)
+    verify.add_argument("--max-reserved-gib", type=float, default=20.0)
     verify.set_defaults(func=_verify)
     return parser
 

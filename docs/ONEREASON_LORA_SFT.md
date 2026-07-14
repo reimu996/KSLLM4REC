@@ -12,7 +12,7 @@ why: 这套流程要在单张 RTX 4090 上，用固定的 OneReason-0.8B、固�
 - 新建独立 Conda 环境 `onereason_lora_sft`，不修改已有环境。
 - 每个输入、依赖、配置、阶段和输出都有可验证记录。
 - 训练保留 response 中的完整 `<think>...</think>`；system、user prompt 不计算 loss。
-- 先通过五档长度显存门，再运行完整 1 epoch；中断后从最近 checkpoint 恢复。
+- 先通过四档长度显存门，再运行完整 1 epoch；中断后从最近 checkpoint 恢复。
 - 输出标准 PEFT LoRA adapter，并实际加载做前向验证。
 
 ## 2. 固定输入
@@ -22,7 +22,7 @@ why: 这套流程要在单张 RTX 4090 上，用固定的 OneReason-0.8B、固�
 运行前置条件:
 
 - Linux 或 WSL2 x86_64；当前实测 NVIDIA 驱动 `595.95`，且驱动必须支持 CUDA 12.6 用户态组件。
-- 单张 RTX 4090；GPU 支持 BF16 和 FlashAttention 2；启动训练时可用显存至少 22.0 GiB。
+- 单张 RTX 4090；GPU 支持 BF16 和 FlashAttention 2；启动训练时可用显存至少 20.5 GiB。
 - Miniconda 固定安装在 `/home/lyc/miniconda3`；新环境固定使用 Python `3.11.15`。项目磁盘额外可用空间至少 30 GiB，用于新环境、wheel、派生数据、checkpoint 和日志。
 - 下表中的模型、数据和 LLaMA-Factory 仓库已经存在；模型与数据不会由脚本联网下载。
 - 首次构建环境时可以访问 PyPI、PyTorch 官方 wheel 索引和 FlashAttention 的 GitHub Release；已有校验通过的本地缓存时可以离线复用。
@@ -82,12 +82,12 @@ next-token 对齐规则如下。`H[:, t]` 预测 `labels[:, t+1]`，因此 item 
 
 ### 3.2 为什么不能直接把完整 logits 转 FP32
 
-在 `B=1, L=32768, V=176253` 时:
+在批准的 `B=1, L=16384, V=176253` 时:
 
-- 完整 BF16 logits 约 10.76 GiB。
-- 完整 FP32 logits 约 21.51 GiB。
+- 完整 BF16 logits 约 5.38 GiB。
+- 完整 FP32 logits 约 10.76 GiB。
 
-这还没有计入模型、激活、梯度和优化器，所以直接执行示例中的 `shift_logits.float()` 不能在 24 GB 4090 上训练 32768 长度。
+这还没有计入模型、激活、梯度和优化器，所以即使 cutoff 已降为 16384，也不能直接执行示例中的完整 `shift_logits.float()`。
 
 ### 3.3 等价的分块实现
 
@@ -126,10 +126,10 @@ backward:
 | 项目 | 值 |
 | --- | --- |
 | 模板 | `qwen3_nothink`；只控制模板格式，不删除数据中已有 think 内容 |
-| cutoff / packing | 32768；`packing=true`；`neat_packing=true` |
+| cutoff / packing | 16384；`packing=true`；`neat_packing=true` |
 | LoRA target | q/k/v/o/gate/up/down projection |
 | LoRA rank / alpha / dropout | 32 / 32 / 0.05 |
-| batch / accumulation | 1 / 4，等效 batch 4 个 packed sequence |
+| batch / accumulation | 1 / 8，等效 batch 8 个 packed sequence |
 | precision | BF16；TF32 开启；不量化 |
 | checkpointing / attention | gradient checkpointing；FlashAttention 2 |
 | optimizer | AdamW；LR `2e-4`；weight decay `0.001`；max grad norm `1.0` |
@@ -139,9 +139,11 @@ backward:
 
 不使用 QLoRA，不允许自动降低 cutoff，不允许把 focal 非有限回退当作成功。代码保留 CE 安全回退用于避免进程直接崩溃，但任一回退都会令阶段门控和最终验收失败。
 
-`src/ksllm4rec_sft/contract.py` 是批准配置的可执行合同。配置检查、每个门禁和全量训练都会逐字段验证模型、数据、模板、LoRA、优化器、学习率、batch、精度、packing、cutoff、随机种子及 custom loss；修改 YAML 并重新生成实现指纹不能绕过合同。训练 CLI 不提供 chunk size 覆盖入口，五档门禁固定使用 512。
+`src/ksllm4rec_sft/contract.py` 是批准配置的可执行合同。配置检查、每个门禁和全量训练都会逐字段验证模型、数据、模板、LoRA、优化器、学习率、batch、精度、packing、cutoff、随机种子及 custom loss；修改 YAML 并重新生成实现指纹不能绕过合同。训练 CLI 不提供 chunk size 覆盖入口，四档门禁固定使用 512。
 
-packing 只拼接样本，不允许不同样本互相看见。`neat_packing=true` 会为每条被拼接样本重置 position id，并让 LLaMA-Factory 派生 `block_diag_attn=true`；system 和 user 对应 label 仍为 `-100`。LLaMA-Factory 内部把原始 `cutoff_len=32768` 转成数据处理长度 32767，再补结尾 token 得到 32768 长度的 packed sequence；配置预检必须同时验证这两个值。
+packing 只拼接样本，不允许不同样本互相看见。`neat_packing=true` 会为每条被拼接样本重置 position id，并让 LLaMA-Factory 派生 `block_diag_attn=true`；system 和 user 对应 label 仍为 `-100`。LLaMA-Factory 内部把原始 `cutoff_len=16384` 转成数据处理长度 16383，再补结尾 token 得到 16384 长度的 packed sequence；配置预检必须同时验证这两个值。
+
+全量预检测得最长完整样本为 10,553 token，因此 16,384 cutoff 不会裁剪或丢弃任何样本。梯度累积从 4 增至 8，使每次优化更新的序列位置预算保持为 `1 * 16384 * 8 = 131072`，与旧方案的 `1 * 32768 * 4` 相同；packing 边界仍会变化，所以不声称两个方案逐 bit 等价。
 
 ## 5. 首次准备
 
@@ -168,7 +170,7 @@ scripts/sft/run_config_check.sh
 
 ## 6. 显存门控和全量运行
 
-GPU 启动条件固定为可用显存至少 22.0 GiB。每个阶段完成一个优化步，也就是 4 个 microbatch；峰值 reserved 显存必须不超过 21.5 GiB。
+GPU 启动条件固定为可用显存至少 20.5 GiB。每个阶段完成一个优化步，也就是 8 个 microbatch；峰值 reserved 显存必须不超过 20.0 GiB。
 
 ```bash
 cd /home/lyc/REC_PROJECTS/KSLLM4REC
@@ -176,14 +178,14 @@ scripts/sft/run_gates.sh
 scripts/sft/run_full.sh
 ```
 
-`run_gates.sh` 串行验证 cutoff 512、2048、8192、16384、32768。只有五个 manifest 都满足以下条件，`run_full.sh` 才启动:
+`run_gates.sh` 串行验证 cutoff 512、2048、8192、16384。只有四个 manifest 都满足以下条件，`run_full.sh` 才启动:
 
 - `status=passed`
 - `optimizer_steps >= 1`
 - `fallback_count = 0`
 - `max_sequence_length >= cutoff * 0.95`，证明阶段实际跑到了对应长度，而不是只有配置名正确
 - manifest 中的实现指纹等于当前锁文件、训练配置、全部 `scripts/sft` 脚本和 `src/ksllm4rec_sft` 源码的组合 SHA256
-- `peak_memory_reserved_gib <= 21.5`
+- `peak_memory_reserved_gib <= 20.0`
 
 全量输出固定在 `artifacts/sft/runs/full_epoch_001`。`save_steps=256`、最多保留 2 个 checkpoint。项目本地 resolver 在训练参数解析前扫描 `checkpoint-<step>`：空目录从 base model 开始；否则只选择 step 最大者，并要求 `adapter_config.json`、`adapter_model.safetensors`、`optimizer.pt`、`scheduler.pt`、`trainer_state.json`、`rng_state.pth` 全部非空，且目录 step 等于 `trainer_state.global_step`。最新 checkpoint 不完整时立即停止，不回退到旧 checkpoint，也不静默从头训练。没有 checkpoint 的非空输出目录同样拒绝运行。
 
@@ -204,7 +206,7 @@ scripts/sft/verify_full.sh
 - `adapter_model.safetensors` 含 196 个 LoRA A 张量和 196 个 LoRA B 张量，全部有限。
 - LoRA B 的总 L2 norm 大于 0，证明它已离开全零初始化。
 - `trainer_state.json` 的 epoch 至少 0.999，global step 大于 0，train loss 有限。
-- 全量 manifest 的 focal 回退次数为 0，峰值 reserved 显存不超过 21.5 GiB。
+- 全量 manifest 的 focal 回退次数为 0，峰值 reserved 显存不超过 20.0 GiB。
 - 全量 manifest 的实现指纹必须等于当前受控实现，避免用旧代码产物冒充当前结果。
 - manifest 的 `resolved_config.output_dir` 必须等于被验证目录；`adapter_config.json`、`adapter_model.safetensors`、`trainer_state.json`、`train_results.json` 的路径、大小和 SHA256 必须逐项匹配训练成功时写入同一 manifest 的快照。
 - 实际加载 base + adapter，短前向 logits 全部有限，且 adapter logits 与禁用 adapter 时不相同。
