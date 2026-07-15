@@ -1,0 +1,97 @@
+{
+  "data_files": {
+    "audit.jsonl": {
+      "path": "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/orpo/data/all_tasks_32705/audit.jsonl",
+      "sha256": "561295e08554e9c19899a5484f2e25c4a32832d8da4f0199a2e21a1c313b1c3e",
+      "size": 267227013
+    },
+    "candidate_report.json": {
+      "path": "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/orpo/data/all_tasks_32705/candidate_report.json",
+      "sha256": "f6195ae03e052cac8691d516cddcbeddbe2d9e311b2ea4ad3ca1df7e21bc0750",
+      "size": 1956
+    },
+    "candidates.jsonl": {
+      "path": "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/orpo/data/all_tasks_32705/candidates.jsonl",
+      "sha256": "519fa7020d931e44787efc3293d4c59fec1468a024e8a6cc7fff12a7ce2a8516",
+      "size": 279204035
+    },
+    "dataset_info.json": {
+      "path": "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/orpo/data/all_tasks_32705/dataset_info.json",
+      "sha256": "2f5dcc3a3704a016eb8e4c19833c6254e31f96434596970aa1b12163a69e1f0c",
+      "size": 557
+    },
+    "fixed_probe_1024.jsonl": {
+      "path": "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/orpo/data/all_tasks_32705/fixed_probe_1024.jsonl",
+      "sha256": "8b8c64bcf9f4590dc006f900ded27d7008816d56ea1b3df6ccfd55a4e63b5fb1",
+      "size": 3502746
+    },
+    "memory_gate.jsonl": {
+      "path": "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/orpo/data/all_tasks_32705/memory_gate.jsonl",
+      "sha256": "c1e67566fdc44ba5978169298468e1feb09e08d9e88f5664b9aa68e508826a7c",
+      "size": 140208
+    },
+    "pair_manifest.json": {
+      "path": "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/orpo/data/all_tasks_32705/pair_manifest.json",
+      "sha256": "5764ec5bbdb786310e577c46bd7bcbd767cffcc5325ddecf805f4086a299c9ba",
+      "size": 1447
+    },
+    "preflight_report.json": {
+      "path": "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/orpo/data/all_tasks_32705/preflight_report.json",
+      "sha256": "bd2107575f959cc13eeda57f8f0fe9e451020f5b6cfa2b1a44914631d67197f1",
+      "size": 2525
+    },
+    "probe_report.json": {
+      "path": "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/orpo/data/all_tasks_32705/probe_report.json",
+      "sha256": "0043e524c662c7b57f93f3073b69c7ad7ebfa1be763732a8e3614d9aacd0fd3b",
+      "size": 398
+    },
+    "train.jsonl": {
+      "path": "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/orpo/data/all_tasks_32705/train.jsonl",
+      "sha256": "ab96da904229473dfd1a1898013fef7692cb879be78e33f17dc187ca3cb97c94",
+      "size": 227109426
+    }
+  },
+  "generation_lock": {
+    "path": "/home/lyc/REC_PROJECTS/KSLLM4REC/configs/orpo/generation.lock.json",
+    "sha256": "752d0177d8516a811fc8e98db2d0374d4f094d701adc60cde1bead0c05d15e25",
+    "size": 45521
+  },
+  "kind": "orpo_training_inputs",
+  "llamafactory": {
+    "commit": "0b7aaf8f6a624bd89a01a155d4265ec861cbdf38",
+    "path": "/home/lyc/REC_PROJECTS/LlamaFactory",
+    "tree": "02158cfe15d2019e3353901d61440b5a320993ab",
+    "working_tree_clean": true
+  },
+  "model": {
+    "files": {
+      "config.json": {
+        "path": "/home/lyc/models/OneReason-0.8B-pretrain-competition/config.json",
+        "sha256": "5fe266426d3f950f5040a9cff724f2250c4a16cb62fac6135be42ed300faebc4",
+        "size": 1366
+      },
+      "model.safetensors": {
+        "path": "/home/lyc/models/OneReason-0.8B-pretrain-competition/model.safetensors",
+        "sha256": "28e66d2ec528473d335ede2b3faa08eddc53eb8ec93747a449e5e7ec812ede90",
+        "size": 1602902800
+      },
+      "tokenizer.json": {
+        "path": "/home/lyc/models/OneReason-0.8B-pretrain-competition/tokenizer.json",
+        "sha256": "57d45d4a87f16fbb39d9b40f2bc074067b7169e102017eb77e2c77a5060a7b56",
+        "size": 11626335
+      },
+      "tokenizer_config.json": {
+        "path": "/home/lyc/models/OneReason-0.8B-pretrain-competition/tokenizer_config.json",
+        "sha256": "2e4d6b589e76f81b8b496289c991d7edb67e87f52f794caa41e92e336d4b20cb",
+        "size": 4357825
+      }
+    },
+    "path": "/home/lyc/models/OneReason-0.8B-pretrain-competition"
+  },
+  "schema_version": 1,
+  "source_dataset": {
+    "path": "/home/lyc/Data/HF_kuaishou-llmrec-sft-baseline-0.91/train.jsonl",
+    "sha256": "4d6b29d76974c9a1517c1b583858e744cae019cb26e1e2d90066e237ebbcf5f8",
+    "size": 242712094
+  }
+}

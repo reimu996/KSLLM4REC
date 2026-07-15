@@ -1,0 +1,74 @@
+### model
+model_name_or_path: /home/lyc/models/OneReason-0.8B-pretrain-competition
+adapter_name_or_path: null
+trust_remote_code: true
+flash_attn: fa2
+disable_gradient_checkpointing: false
+
+### method
+stage: dpo
+do_train: true
+finetuning_type: lora
+lora_target: q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj
+lora_rank: 32
+lora_alpha: 32
+lora_dropout: 0.0
+pref_loss: orpo
+pref_beta: 0.1
+pref_ftx: 0.0
+pure_bf16: false
+
+### dataset
+dataset: orpo_all_tasks_32705
+dataset_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/orpo/data/all_tasks_32705
+template: qwen3_nothink
+cutoff_len: 16384
+packing: false
+neat_packing: false
+train_on_prompt: false
+overwrite_cache: false
+preprocessing_num_workers: 8
+preprocessing_batch_size: 1000
+dataloader_num_workers: 2
+
+### output
+output_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/orpo/runs/replace_me
+logging_strategy: steps
+logging_steps: 5
+save_strategy: epoch
+save_total_limit: 2
+save_only_model: false
+overwrite_output_dir: false
+plot_loss: false
+report_to: none
+
+### optimizer and schedule
+optim: adamw_torch
+adam_beta1: 0.9
+adam_beta2: 0.999
+adam_epsilon: 1.0e-8
+max_grad_norm: 1.0
+learning_rate: 1.0e-4
+weight_decay: 0.001
+lr_scheduler_type: cosine
+warmup_ratio: 0.03
+
+### train
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 8
+num_train_epochs: 2.0
+max_steps: -1
+bf16: true
+tf32: true
+gradient_checkpointing: true
+seed: 42
+data_seed: 42
+ddp_find_unused_parameters: false
+ddp_timeout: 180000000
+resume_from_checkpoint: null
+
+### custom memory-bounded ORPO
+custom_orpo:
+  chunk_size: 512
+  min_free_gib: 20.5
+  max_reserved_gib: 20.0
