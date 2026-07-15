@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "namespace": "reimu996",
+  "visibility": "public",
+  "required_uploaded_files": [
+    "README.md",
+    "adapter_config.json",
+    "adapter_model.safetensors"
+  ],
+  "allowed_hub_managed_files": [
+    ".gitattributes"
+  ],
+  "required_remote_files": [
+    ".gitattributes",
+    "README.md",
+    "adapter_config.json",
+    "adapter_model.safetensors"
+  ],
+  "commit_message": "Upload OneReason-0.8B ORPO LoRA adapter",
+  "training": {
+    "base_description": "clean OneReason-0.8B competition base",
+    "method": "direct ORPO LoRA",
+    "pairs": 32705,
+    "lora_rank": 32,
+    "lora_alpha": 32,
+    "lora_dropout": 0.0,
+    "target_modules": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj",
+      "gate_proj",
+      "up_proj",
+      "down_proj"
+    ]
+  },
+  "repositories": [
+    {
+      "epoch": 1,
+      "repo_id": "reimu996/OneReason-0.8B-ORPO-Epoch1",
+      "source_dir": "artifacts/orpo/runs/orpo_from_base_epoch2/checkpoint-4089",
+      "adapter_model": {
+        "size": 80792456,
+        "sha256": "c367c92cd09f5b8d8ee896a8928977767cbf544a0e261f5d318aba7bc2cb5c68"
+      },
+      "adapter_config": {
+        "size": 1082,
+        "sha256": "b8847f943c2f2050181c4ae2db76b189d5c387f9fafb2c3e4aa7bdbbf44dead7"
+      }
+    },
+    {
+      "epoch": 2,
+      "repo_id": "reimu996/OneReason-0.8B-ORPO-Epoch2",
+      "source_dir": "artifacts/orpo/runs/orpo_from_base_epoch2/checkpoint-8178",
+      "adapter_model": {
+        "size": 80792456,
+        "sha256": "593a117229c11f8bc488acb4e6402c6ec879be116b6d063dd1901974c6fe6a27"
+      },
+      "adapter_config": {
+        "size": 1082,
+        "sha256": "b8847f943c2f2050181c4ae2db76b189d5c387f9fafb2c3e4aa7bdbbf44dead7"
+      }
+    }
+  ]
+}
