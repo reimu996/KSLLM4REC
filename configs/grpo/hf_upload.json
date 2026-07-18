@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "namespace": "reimu996",
+  "visibility": "public",
+  "artifact_root": "artifacts/grpo/hf_upload",
+  "log_root": "operation_logs/grpo",
+  "required_uploaded_files": [
+    "README.md",
+    "adapter_config.json",
+    "adapter_model.safetensors"
+  ],
+  "allowed_hub_managed_files": [
+    ".gitattributes"
+  ],
+  "required_remote_files": [
+    ".gitattributes",
+    "README.md",
+    "adapter_config.json",
+    "adapter_model.safetensors"
+  ],
+  "commit_message": "Upload OneReason-0.8B GRPO LoRA adapter",
+  "training": {
+    "title": "OneReason-0.8B Online GRPO LoRA",
+    "base_description": "OneReason-0.8B competition base with the approved SFT adapter",
+    "method": "online GRPO",
+    "method_details": "G=8 live constrained sampling, forced-GT safeguard, two epochs",
+    "data_label": "Training groups",
+    "data_value": "6,378 groups x 2 epochs",
+    "lora_rank": 32,
+    "lora_alpha": 32,
+    "lora_dropout": 0.0,
+    "target_modules": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj",
+      "gate_proj",
+      "up_proj",
+      "down_proj"
+    ],
+    "evaluation_status": "A local fixed beam-16 constrained probe was completed; no official competition score is claimed."
+  },
+  "repositories": [
+    {
+      "epoch": 1,
+      "repo_id": "reimu996/OneReason-0.8B-GRPO-Epoch1",
+      "source_dir": "artifacts/grpo/runs/sft_grpo_g8_forcedgt_p050_zscore_2epoch/epoch_001",
+      "adapter_model": {
+        "size": 80792456,
+        "sha256": "104b1ac5193525836413f50ac2ba996caaf5b7106e81c97cbd28d699fcd16115"
+      },
+      "adapter_config": {
+        "size": 1082,
+        "sha256": "ab0a7166ee06530101d16f95b1736189cbe300d4b74138fd4110a15e72a9da60"
+      }
+    },
+    {
+      "epoch": 2,
+      "repo_id": "reimu996/OneReason-0.8B-GRPO-Epoch2",
+      "source_dir": "artifacts/grpo/runs/sft_grpo_g8_forcedgt_p050_zscore_2epoch/epoch_002",
+      "adapter_model": {
+        "size": 80792456,
+        "sha256": "42003b20033693db48e2168983a41916a6c34014a3d4db7ebb1d843ddde39e51"
+      },
+      "adapter_config": {
+        "size": 1082,
+        "sha256": "ab0a7166ee06530101d16f95b1736189cbe300d4b74138fd4110a15e72a9da60"
+      }
+    }
+  ]
+}

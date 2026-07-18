@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upload the two approved ORPO LoRA adapters to new public HF repos.
+"""Upload two approved LoRA adapters to new public HF repos.
 
 The script uploads exactly three approved files, permits only HF's generated
 `.gitattributes` beside them, and refuses existing repos. It never loads a
@@ -22,8 +22,8 @@ from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = PROJECT_ROOT / "configs/orpo/hf_upload.json"
-ARTIFACT_ROOT = PROJECT_ROOT / "artifacts/orpo/hf_upload"
-LOG_ROOT = PROJECT_ROOT / "operation_logs/orpo"
+DEFAULT_ARTIFACT_ROOT = "artifacts/orpo/hf_upload"
+DEFAULT_LOG_ROOT = "operation_logs/orpo"
 UPLOADED_FILES = (
     "README.md",
     "adapter_config.json",
@@ -89,13 +89,9 @@ def load_config(path: Path) -> dict[str, Any]:
             f"required_uploaded_files must be exactly {list(UPLOADED_FILES)}"
         )
     if tuple(config.get("allowed_hub_managed_files", ())) != HUB_MANAGED_FILES:
-        raise UploadError(
-            "allowed_hub_managed_files must contain only .gitattributes"
-        )
+        raise UploadError("allowed_hub_managed_files must contain only .gitattributes")
     if tuple(config.get("required_remote_files", ())) != REMOTE_FILES:
-        raise UploadError(
-            f"required_remote_files must be exactly {list(REMOTE_FILES)}"
-        )
+        raise UploadError(f"required_remote_files must be exactly {list(REMOTE_FILES)}")
 
     namespace = config.get("namespace")
     repositories = config.get("repositories")
@@ -150,6 +146,17 @@ def resolve_source_dir(relative_path: str) -> Path:
     return source_dir
 
 
+def resolve_project_path(relative_path: str, label: str) -> Path:
+    if not isinstance(relative_path, str) or Path(relative_path).is_absolute():
+        raise UploadError(f"{label} must be project-relative: {relative_path}")
+    resolved = (PROJECT_ROOT / relative_path).resolve()
+    try:
+        resolved.relative_to(PROJECT_ROOT)
+    except ValueError as exc:
+        raise UploadError(f"{label} escapes project root: {relative_path}") from exc
+    return resolved
+
+
 def assert_expected(path: Path, expected: dict[str, Any], label: str) -> dict[str, Any]:
     if not path.is_file():
         raise UploadError(f"missing required file: {path}")
@@ -160,15 +167,33 @@ def assert_expected(path: Path, expected: dict[str, Any], label: str) -> dict[st
 
 
 def render_readme(repo: dict[str, Any], training: dict[str, Any]) -> str:
+    title = training.get("title", "OneReason-0.8B ORPO LoRA")
+    method = training.get("method", "direct ORPO")
+    method_details = training.get(
+        "method_details", f"{method} from the first optimizer step"
+    )
+    data_label = training.get("data_label", "Preference pairs")
+    data_value = training.get("data_value")
+    if data_value is None and isinstance(training.get("pairs"), int):
+        data_value = f"{training['pairs']:,}"
+    elif data_value is None:
+        data_value = training.get("pairs")
+    if data_value is None:
+        raise UploadError("training must define data_value or pairs for README")
     modules = ", ".join(training["target_modules"])
+    evaluation_status = training.get(
+        "evaluation_status",
+        "The official constrained-beam competition evaluation has not been run "
+        "for this adapter. This repository makes no performance claim.",
+    )
     return (
-        f"# OneReason-0.8B ORPO LoRA - Epoch {repo['epoch']}\n\n"
+        f"# {title} - Epoch {repo['epoch']}\n\n"
         "This repository contains one LoRA adapter checkpoint for the "
         "Kuaishou LLM4Rec competition.\n\n"
         "## Training\n\n"
         f"- Start: {training['base_description']}\n"
-        f"- Method: {training['method']} from the first optimizer step\n"
-        f"- Preference pairs: {training['pairs']:,}\n"
+        f"- Method: {method_details}\n"
+        f"- {data_label}: {data_value}\n"
         f"- Completed epoch: {repo['epoch']}\n"
         f"- LoRA rank / alpha / dropout: {training['lora_rank']} / "
         f"{training['lora_alpha']} / {training['lora_dropout']}\n"
@@ -178,15 +203,12 @@ def render_readme(repo: dict[str, Any], training: dict[str, Any]) -> str:
         "- `adapter_config.json`: the original training checkpoint config, "
         "preserved byte-for-byte\n\n"
         "## Evaluation status\n\n"
-        "The official constrained-beam competition evaluation has not been run "
-        "for this adapter. This repository makes no performance claim.\n"
+        f"{evaluation_status}\n"
     )
 
 
 def assert_allowlist(directory: Path) -> list[str]:
-    actual = sorted(
-        path.name for path in directory.iterdir() if path.is_file()
-    )
+    actual = sorted(path.name for path in directory.iterdir() if path.is_file())
     expected = sorted(UPLOADED_FILES)
     if actual != expected:
         raise UploadError(f"file allowlist mismatch in {directory}: {actual}")
@@ -249,8 +271,12 @@ def require_absent(api: Any, repo_id: str) -> None:
         status = exc.response.status_code if exc.response is not None else None
         if status == 404:
             return
-        raise UploadError(f"cannot check target repository {repo_id}: HTTP {status}") from exc
-    raise UploadError(f"target repository already exists; refusing overwrite: {repo_id}")
+        raise UploadError(
+            f"cannot check target repository {repo_id}: HTTP {status}"
+        ) from exc
+    raise UploadError(
+        f"target repository already exists; refusing overwrite: {repo_id}"
+    )
 
 
 def upload_and_verify(
@@ -372,14 +398,23 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def run(args: argparse.Namespace) -> Path:
     if not RUN_ID_RE.fullmatch(args.run_id):
-        raise UploadError("run-id may contain only letters, digits, dot, dash, underscore")
+        raise UploadError(
+            "run-id may contain only letters, digits, dot, dash, underscore"
+        )
 
     config_path = args.config.resolve()
     config = load_config(config_path)
-    artifact_run_dir = ARTIFACT_ROOT / args.run_id
+    artifact_root = resolve_project_path(
+        config.get("artifact_root", DEFAULT_ARTIFACT_ROOT),
+        "artifact_root",
+    )
+    log_root = resolve_project_path(
+        config.get("log_root", DEFAULT_LOG_ROOT), "log_root"
+    )
+    artifact_run_dir = artifact_root / args.run_id
     staging_root = artifact_run_dir / "staging"
     download_root = artifact_run_dir / "anonymous_download"
-    log_dir = LOG_ROOT / args.run_id
+    log_dir = log_root / args.run_id
     manifest_path = log_dir / "manifest.json"
     if artifact_run_dir.exists() or log_dir.exists():
         raise UploadError(f"run-id already exists; refusing reuse: {args.run_id}")
@@ -413,9 +448,7 @@ def run(args: argparse.Namespace) -> Path:
         manifest["status"] = "prepared"
         write_manifest(manifest_path, manifest)
         if args.execute:
-            upload_and_verify(
-                config, states, download_root, manifest, manifest_path
-            )
+            upload_and_verify(config, states, download_root, manifest, manifest_path)
             manifest["status"] = "completed"
         else:
             manifest["status"] = "prepared_only"
