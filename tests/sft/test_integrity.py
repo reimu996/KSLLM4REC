@@ -5,15 +5,20 @@ import json
 import subprocess
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
 from ksllm4rec_sft.integrity import (
+    artifact_identity,
+    create_profile_artifact_lock,
     snapshot_output_artifacts,
     verify_artifact_lock,
     verify_environment_lock,
     verify_output_artifacts,
 )
+from ksllm4rec_sft.data import expected_dataset_info
+from ksllm4rec_sft.profiles import BASELINE_PROFILE, FRONTIER_PROFILE, MODEL_PATH
 
 
 def locked_file(path: Path) -> dict[str, object]:
@@ -67,6 +72,7 @@ class ArtifactIntegrityTest(unittest.TestCase):
             self.assertEqual(report["status"], "passed")
             self.assertEqual(report["llamafactory"]["commit"], commit)
             self.assertTrue(report["llamafactory"]["working_tree_clean"])
+            self.assertIsNone(artifact_identity(report)["dataset_info"]["path"])
 
     def test_rejects_dirty_llamafactory_working_tree(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -200,6 +206,127 @@ class ArtifactIntegrityTest(unittest.TestCase):
             )
             with self.assertRaisesRegex(RuntimeError, "mismatch"):
                 verify_output_artifacts(root, snapshot)
+
+    def test_profile_lock_preserves_each_record_and_uses_fixed_source_identity(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "source.jsonl"
+            derived_dir = root / "derived"
+            derived_dir.mkdir()
+            derived = derived_dir / "train_alpaca.jsonl"
+            source.write_text(
+                '[{"system":"s","prompt":"p","response":"r"}]\n',
+                encoding="utf-8",
+            )
+            derived.write_text(
+                '{"instruction":"p","input":"","output":"r","system":"s"}\n',
+                encoding="utf-8",
+            )
+            (derived_dir / "dataset_info.json").write_text(
+                json.dumps(expected_dataset_info("frontier_dataset", derived.name)),
+                encoding="utf-8",
+            )
+            base_lock = root / "base.lock.json"
+            output_lock = root / "frontier.lock.json"
+            base_lock.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "llamafactory": {"path": "/lf", "commit": "c", "tree": "t"},
+                        "model": {"path": str(MODEL_PATH), "files": {}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            selected = replace(
+                FRONTIER_PROFILE,
+                source_path=source,
+                source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+                source_size=source.stat().st_size,
+                source_records=1,
+                dataset_dir=derived_dir,
+                artifact_lock_path=output_lock,
+                dataset_name="frontier_dataset",
+            )
+            base_source = root / "base-source"
+            base_source.write_text("base", encoding="utf-8")
+            base_derived_dir = root / "base-derived"
+            base_derived_dir.mkdir()
+            base_derived = base_derived_dir / "train_alpaca.jsonl"
+            base_derived.write_text("base-derived", encoding="utf-8")
+            baseline = replace(
+                BASELINE_PROFILE,
+                artifact_lock_path=base_lock,
+                source_path=base_source,
+                source_sha256=hashlib.sha256(base_source.read_bytes()).hexdigest(),
+                source_size=base_source.stat().st_size,
+                source_records=1,
+                dataset_dir=base_derived_dir,
+            )
+            base_report = {
+                "status": "passed",
+                "profile": None,
+                "lock_path": str(base_lock.resolve()),
+                "lock_sha256": "base-lock-sha",
+                "model_root": str(MODEL_PATH.resolve()),
+                "model_files": {},
+                "source_dataset": {
+                    "path": str(base_source.resolve()),
+                    "size": base_source.stat().st_size,
+                    "sha256": baseline.source_sha256,
+                    "records": 1,
+                },
+                "derived_dataset": {
+                    "path": str(base_derived.resolve()),
+                    "size": base_derived.stat().st_size,
+                    "sha256": hashlib.sha256(base_derived.read_bytes()).hexdigest(),
+                    "records": 1,
+                },
+                "llamafactory": {"path": "/lf", "commit": "c", "tree": "t"},
+            }
+
+            def select_profile(value):
+                return baseline if value == "baseline" else value
+
+            with (
+                patch(
+                    "ksllm4rec_sft.integrity.get_profile",
+                    side_effect=select_profile,
+                ),
+                patch(
+                    "ksllm4rec_sft.integrity.verify_artifact_lock",
+                    return_value=base_report,
+                ),
+            ):
+                report = create_profile_artifact_lock(
+                    profile=selected,
+                    source_path=source,
+                    derived_path=derived,
+                    base_lock_path=base_lock,
+                    output_path=output_lock,
+                )
+            created = json.loads(output_lock.read_text(encoding="utf-8"))
+            self.assertEqual(report["status"], "passed")
+            self.assertEqual(created["profile"], selected.name)
+            self.assertEqual(created["source_dataset"]["records"], 1)
+            self.assertEqual(
+                created["derived_dataset"]["sha256"],
+                hashlib.sha256(derived.read_bytes()).hexdigest(),
+            )
+
+    def test_profile_lock_rejects_an_unapproved_source_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            with self.assertRaisesRegex(RuntimeError, "Source path"):
+                create_profile_artifact_lock(
+                    profile=FRONTIER_PROFILE,
+                    source_path=root / "different-source.jsonl",
+                    derived_path=FRONTIER_PROFILE.derived_path,
+                    base_lock_path=BASELINE_PROFILE.artifact_lock_path,
+                    output_path=FRONTIER_PROFILE.artifact_lock_path,
+                )
 
 
 if __name__ == "__main__":

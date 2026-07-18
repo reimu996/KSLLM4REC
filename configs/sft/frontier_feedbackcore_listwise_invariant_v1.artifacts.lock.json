@@ -1,0 +1,47 @@
+{
+  "dataset_info": {
+    "path": "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/data/frontier_feedbackcore_listwise_invariant_v1/dataset_info.json",
+    "sha256": "a44fbbf06bf3af75e0a0495c0f5ea8fdd3ea66e977f22aaddf238e465adab46a",
+    "size": 257
+  },
+  "derived_dataset": {
+    "path": "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/data/frontier_feedbackcore_listwise_invariant_v1/train_alpaca.jsonl",
+    "records": 63700,
+    "sha256": "6994bc8f13a676fb6ce3eb25bad891b9b43fdc6cabf5d24fe578329d77490b8d",
+    "size": 269870172
+  },
+  "llamafactory": {
+    "commit": "0b7aaf8f6a624bd89a01a155d4265ec861cbdf38",
+    "path": "/home/lyc/REC_PROJECTS/LlamaFactory",
+    "tree": "02158cfe15d2019e3353901d61440b5a320993ab"
+  },
+  "model": {
+    "files": {
+      "config.json": {
+        "sha256": "5fe266426d3f950f5040a9cff724f2250c4a16cb62fac6135be42ed300faebc4",
+        "size": 1366
+      },
+      "model.safetensors": {
+        "sha256": "28e66d2ec528473d335ede2b3faa08eddc53eb8ec93747a449e5e7ec812ede90",
+        "size": 1602902800
+      },
+      "tokenizer.json": {
+        "sha256": "57d45d4a87f16fbb39d9b40f2bc074067b7169e102017eb77e2c77a5060a7b56",
+        "size": 11626335
+      },
+      "tokenizer_config.json": {
+        "sha256": "2e4d6b589e76f81b8b496289c991d7edb67e87f52f794caa41e92e336d4b20cb",
+        "size": 4357825
+      }
+    },
+    "path": "/home/lyc/models/OneReason-0.8B-pretrain-competition"
+  },
+  "profile": "frontier_feedbackcore_listwise_invariant_v1",
+  "schema_version": 1,
+  "source_dataset": {
+    "path": "/home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/train.jsonl",
+    "records": 63700,
+    "sha256": "9e3465cedbdaf784ab4720699649c76c256414e2c2089efcd7657f63bae7449a",
+    "size": 269105772
+  }
+}

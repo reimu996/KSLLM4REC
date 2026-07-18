@@ -7,15 +7,12 @@ from pathlib import Path
 from typing import Any
 
 from .fingerprint import implementation_fingerprint
+from .integrity import artifact_identity, validate_profile_artifact_identity
 from .manifest import atomic_write_json
+from .profiles import BASELINE_PROFILE, SFTProfile, get_profile
 
 
-REQUIRED_GATES = {
-    "gate_00512": 512,
-    "gate_02048": 2048,
-    "gate_08192": 8192,
-    "gate_16384": 16384,
-}
+REQUIRED_GATES = dict(BASELINE_PROFILE.gate_cutoffs)
 
 
 def verify_gpu_gates(
@@ -23,10 +20,23 @@ def verify_gpu_gates(
     report_path: Path,
     project_root: Path,
     max_reserved_gib: float = 20.0,
+    *,
+    profile: str | SFTProfile = BASELINE_PROFILE,
+    expected_input_integrity: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    current_fingerprint = implementation_fingerprint(project_root)
+    selected = get_profile(profile)
+    required_gates = dict(selected.gate_cutoffs)
+    if selected is not BASELINE_PROFILE and expected_input_integrity is None:
+        raise RuntimeError(
+            f"Profile {selected.name!r} requires an artifact lock identity for gate validation."
+        )
+    expected_identity = None
+    if expected_input_integrity is not None:
+        validate_profile_artifact_identity(expected_input_integrity, selected)
+        expected_identity = artifact_identity(expected_input_integrity)
+    current_fingerprint = implementation_fingerprint(project_root, selected)
     candidates: dict[str, list[tuple[str, Path, dict[str, Any]]]] = {
-        name: [] for name in REQUIRED_GATES
+        name: [] for name in required_gates
     }
     for path in log_root.glob("*/manifest.json"):
         try:
@@ -34,20 +44,38 @@ def verify_gpu_gates(
         except (OSError, json.JSONDecodeError):
             continue
         stage = manifest.get("stage")
-        if stage in candidates:
+        manifest_profile = manifest.get("profile")
+        profile_matches = manifest_profile == selected.name or (
+            selected is BASELINE_PROFILE and manifest_profile is None
+        )
+        if stage in candidates and profile_matches:
             candidates[stage].append(
                 (str(manifest.get("updated_at", "")), path, manifest)
             )
 
     accepted: dict[str, Any] = {}
     failures: list[str] = []
-    for stage, expected_cutoff in REQUIRED_GATES.items():
+    for stage, expected_cutoff in required_gates.items():
         valid = []
         for _, path, manifest in candidates[stage]:
             resolved = manifest.get("resolved_config", {})
             result = manifest.get("result", {})
             if manifest.get("status") != "passed":
                 continue
+            if selected is not BASELINE_PROFILE:
+                if resolved.get("dataset") != selected.dataset_name:
+                    continue
+                if (
+                    Path(resolved.get("dataset_dir", "")).resolve()
+                    != selected.dataset_dir.resolve()
+                ):
+                    continue
+            if expected_identity is not None:
+                if (
+                    artifact_identity(manifest.get("input_integrity", {}))
+                    != expected_identity
+                ):
+                    continue
             if int(resolved.get("cutoff_len", -1)) != expected_cutoff:
                 continue
             if int(resolved.get("max_steps", -1)) != 1:
@@ -94,7 +122,9 @@ def verify_gpu_gates(
 
     report = {
         "status": "failed" if failures else "passed",
+        "profile": selected.name,
         "max_reserved_gib": max_reserved_gib,
+        "input_artifact_identity": expected_identity,
         "implementation_fingerprint": current_fingerprint,
         "accepted": accepted,
         "failures": failures,

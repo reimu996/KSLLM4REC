@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from ksllm4rec_sft.verify import _latest_full_manifest, _verify_manifest_fingerprint
+from ksllm4rec_sft.profiles import FRONTIER_PROFILE
 
 
 class ManifestFingerprintVerificationTest(unittest.TestCase):
@@ -59,6 +60,45 @@ class ManifestFingerprintVerificationTest(unittest.TestCase):
                     {"implementation_fingerprint": {"sha256": "stale"}},
                     Path(temp_dir),
                 )
+
+    def test_frontier_manifest_selection_requires_profile_stage_and_output(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            output = root / "output"
+            manifests = [
+                {
+                    "profile": "baseline",
+                    "stage": "full_epoch_001",
+                    "status": "passed",
+                    "updated_at": "2026-07-20T00:00:03+08:00",
+                    "resolved_config": {"output_dir": str(output)},
+                },
+                {
+                    "profile": FRONTIER_PROFILE.name,
+                    "stage": "full_epoch_001",
+                    "status": "passed",
+                    "updated_at": "2026-07-20T00:00:02+08:00",
+                    "resolved_config": {"output_dir": str(output)},
+                },
+                {
+                    "profile": FRONTIER_PROFILE.name,
+                    "stage": FRONTIER_PROFILE.full_stage,
+                    "status": "passed",
+                    "updated_at": "2026-07-20T00:00:01+08:00",
+                    "resolved_config": {"output_dir": str(output)},
+                },
+            ]
+            for index, manifest in enumerate(manifests):
+                run = root / f"run-{index}"
+                run.mkdir()
+                (run / "manifest.json").write_text(
+                    json.dumps(manifest), encoding="utf-8"
+                )
+            path, selected = _latest_full_manifest(root, output, FRONTIER_PROFILE)
+            self.assertEqual(path.parent.name, "run-2")
+            self.assertEqual(selected["stage"], FRONTIER_PROFILE.full_stage)
 
 
 if __name__ == "__main__":

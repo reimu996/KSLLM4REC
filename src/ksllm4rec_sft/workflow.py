@@ -14,6 +14,8 @@ from llamafactory.model import load_model, load_tokenizer
 from llamafactory.train.callbacks import LogCallback
 from llamafactory.train.sft.workflow import calculate_tps, plot_loss
 
+from .data import DATASET_NAME
+from .checkpoint import CheckpointBindingCallback
 from .item_tokens import build_item_token_ids
 from .trainer import FocalItemTrainer
 
@@ -28,6 +30,9 @@ def run_focal_sft(
     focal_gamma: float,
     item_weight: float,
     lm_chunk_size: int,
+    dataset_name: str = DATASET_NAME,
+    checkpoint_binding: dict[str, Any] | None = None,
+    checkpoint_origin_manifest=None,
 ) -> dict[str, Any]:
     """Run SFT while replacing only LLaMA-Factory's standard loss path."""
 
@@ -64,19 +69,33 @@ def run_focal_sft(
         **tokenizer_module,
     )
 
+    callbacks = [LogCallback()]
+    if checkpoint_binding is not None:
+        if checkpoint_origin_manifest is None:
+            raise ValueError(
+                "checkpoint_origin_manifest is required with checkpoint_binding."
+            )
+        callbacks.append(
+            CheckpointBindingCallback(
+                run_identity=checkpoint_binding,
+                origin_manifest=checkpoint_origin_manifest,
+            )
+        )
+
     trainer = FocalItemTrainer(
         model=model,
         args=training_args,
         finetuning_args=finetuning_args,
         model_args=model_args,
         data_collator=data_collator,
-        callbacks=[LogCallback()],
+        callbacks=callbacks,
         tokenizer=tokenizer,
         processor=tokenizer_module.get("processor"),
         item_token_ids=item_token_ids,
         focal_gamma=focal_gamma,
         item_weight=item_weight,
         lm_chunk_size=lm_chunk_size,
+        dataset_name=dataset_name,
         **dataset_module,
     )
 

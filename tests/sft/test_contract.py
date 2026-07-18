@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from ksllm4rec_sft.contract import validate_training_contract
+from ksllm4rec_sft.profiles import FRONTIER_PROFILE
 
 
 def approved_config() -> dict:
@@ -105,6 +107,57 @@ class TrainingContractTest(unittest.TestCase):
                 config,
                 {"gamma": 2.0, "item_weight": 3.0, "chunk_size": 128},
                 "gate_00512",
+            )
+
+    def test_accepts_frontier_only_with_its_own_dataset_stage_and_output(self) -> None:
+        config = approved_config()
+        config.update(
+            dataset=FRONTIER_PROFILE.dataset_name,
+            dataset_dir=str(FRONTIER_PROFILE.dataset_dir),
+            output_dir=str(FRONTIER_PROFILE.full_output_dir),
+        )
+        report = validate_training_contract(
+            config,
+            {"gamma": 2.0, "item_weight": 3.0, "chunk_size": 512},
+            FRONTIER_PROFILE.full_stage,
+            profile=FRONTIER_PROFILE,
+        )
+        self.assertEqual(report["profile"], FRONTIER_PROFILE.name)
+        self.assertEqual(report["dataset"], FRONTIER_PROFILE.dataset_name)
+
+    def test_frontier_rejects_baseline_dataset_and_stage(self) -> None:
+        config = approved_config()
+        config["output_dir"] = str(FRONTIER_PROFILE.full_output_dir)
+        with self.assertRaisesRegex(RuntimeError, "dataset"):
+            validate_training_contract(
+                config,
+                {"gamma": 2.0, "item_weight": 3.0, "chunk_size": 512},
+                FRONTIER_PROFILE.full_stage,
+                profile=FRONTIER_PROFILE,
+            )
+        with self.assertRaisesRegex(RuntimeError, "Unapproved SFT run stage"):
+            validate_training_contract(
+                config,
+                {"gamma": 2.0, "item_weight": 3.0, "chunk_size": 512},
+                "full_epoch_001",
+                profile=FRONTIER_PROFILE,
+            )
+
+    def test_frontier_gate_output_must_use_its_isolated_root(self) -> None:
+        config = approved_config()
+        config.update(
+            dataset=FRONTIER_PROFILE.dataset_name,
+            dataset_dir=str(FRONTIER_PROFILE.dataset_dir),
+            cutoff_len=512,
+            max_steps=1,
+            output_dir=str(Path("/tmp/not-the-frontier-gate-root")),
+        )
+        with self.assertRaisesRegex(RuntimeError, "output_dir"):
+            validate_training_contract(
+                config,
+                {"gamma": 2.0, "item_weight": 3.0, "chunk_size": 512},
+                "frontier_gate_00512",
+                profile=FRONTIER_PROFILE,
             )
 
 

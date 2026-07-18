@@ -15,6 +15,12 @@ from .data import DATASET_NAME
 from .loss import chunked_focal_loss, summarize_metrics
 
 
+def dataset_loss_metric_name(dataset_name: str) -> str:
+    if not dataset_name:
+        raise ValueError("dataset_name must not be empty.")
+    return f"loss_ds_{dataset_name}"
+
+
 def _unwrap_causal_lm(trainer: "FocalItemTrainer", model):
     unwrapped = trainer.accelerator.unwrap_model(model)
     if hasattr(unwrapped, "get_base_model"):
@@ -52,16 +58,20 @@ class FocalItemTrainer(CustomSeq2SeqTrainer):
         focal_gamma: float = 2.0,
         item_weight: float = 3.0,
         lm_chunk_size: int = 512,
+        dataset_name: str = DATASET_NAME,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         if not item_token_ids:
             raise ValueError("item_token_ids must not be empty.")
+        if not dataset_name:
+            raise ValueError("dataset_name must not be empty.")
         self._item_token_ids_cpu = torch.tensor(item_token_ids, dtype=torch.long)
         self._item_lookup_by_device: dict[torch.device, torch.Tensor] = {}
         self.focal_gamma = float(focal_gamma)
         self.item_weight = float(item_weight)
         self.lm_chunk_size = int(lm_chunk_size)
+        self.dataset_name = dataset_name
         self.micro_step = 0
         self.custom_metric_buffer: dict[str, list[float]] = defaultdict(list)
         self.fallback_count = 0
@@ -84,7 +94,7 @@ class FocalItemTrainer(CustomSeq2SeqTrainer):
             "item_ratio": metrics.item_ratio,
             "item_loss": metrics.item_loss,
             "text_loss": metrics.text_loss,
-            f"loss_ds_{DATASET_NAME}": metrics.dataset_loss,
+            dataset_loss_metric_name(self.dataset_name): metrics.dataset_loss,
             "valid_tokens": float(metrics.valid_tokens),
             "item_tokens": float(metrics.item_tokens),
         }

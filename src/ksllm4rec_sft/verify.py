@@ -7,10 +7,16 @@ import math
 from pathlib import Path
 from typing import Any
 
-from .contract import FULL_STAGE, validate_training_contract
+from .contract import validate_training_contract
 from .data import sha256_file
 from .fingerprint import implementation_fingerprint
-from .integrity import verify_output_artifacts
+from .integrity import (
+    artifact_identity,
+    require_matching_artifact_identity,
+    validate_profile_artifact_identity,
+    verify_output_artifacts,
+)
+from .profiles import BASELINE_PROFILE, SFTProfile, get_profile
 
 
 EXPECTED_TARGET_MODULES = {
@@ -32,8 +38,11 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def _latest_full_manifest(
-    log_root: Path, output_dir: Path
+    log_root: Path,
+    output_dir: Path,
+    profile: str | SFTProfile = BASELINE_PROFILE,
 ) -> tuple[Path, dict[str, Any]]:
+    selected = get_profile(profile)
     expected_output = output_dir.resolve()
     matches: list[tuple[str, Path, dict[str, Any]]] = []
     for path in log_root.glob("*/manifest.json"):
@@ -41,8 +50,13 @@ def _latest_full_manifest(
             manifest = _read_json(path)
         except (OSError, json.JSONDecodeError):
             continue
+        manifest_profile = manifest.get("profile")
+        profile_matches = manifest_profile == selected.name or (
+            selected is BASELINE_PROFILE and manifest_profile is None
+        )
         if (
-            manifest.get("stage") == FULL_STAGE
+            manifest.get("stage") == selected.full_stage
+            and profile_matches
             and manifest.get("status") == "passed"
             and Path(
                 manifest.get("resolved_config", {}).get("output_dir", "")
@@ -52,16 +66,19 @@ def _latest_full_manifest(
             matches.append((str(manifest.get("updated_at", "")), path, manifest))
     if not matches:
         raise RuntimeError(
-            f"No passed {FULL_STAGE} manifest bound to {expected_output} was found."
+            f"No passed {selected.full_stage} manifest for profile "
+            f"{selected.name!r} bound to {expected_output} was found."
         )
     _, path, manifest = max(matches, key=lambda item: item[0])
     return path, manifest
 
 
 def _verify_manifest_fingerprint(
-    manifest: dict[str, Any], project_root: Path
+    manifest: dict[str, Any],
+    project_root: Path,
+    profile: str | SFTProfile = BASELINE_PROFILE,
 ) -> dict[str, Any]:
-    current_fingerprint = implementation_fingerprint(project_root)
+    current_fingerprint = implementation_fingerprint(project_root, profile)
     manifest_fingerprint = manifest.get("implementation_fingerprint", {})
     if manifest_fingerprint.get("sha256") != current_fingerprint["sha256"]:
         raise RuntimeError(
@@ -77,18 +94,55 @@ def verify_adapter_files(
     log_root: Path,
     project_root: Path,
     max_reserved_gib: float = 20.0,
+    *,
+    profile: str | SFTProfile = BASELINE_PROFILE,
+    expected_input_integrity: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     import torch
     from safetensors import safe_open
 
+    selected = get_profile(profile)
+    if selected is not BASELINE_PROFILE and expected_input_integrity is None:
+        raise RuntimeError(
+            f"Profile {selected.name!r} requires an artifact lock identity for verification."
+        )
+    if expected_input_integrity is not None:
+        validate_profile_artifact_identity(expected_input_integrity, selected)
     output_dir = output_dir.resolve()
-    manifest_path, manifest = _latest_full_manifest(log_root, output_dir)
+    manifest_path, manifest = _latest_full_manifest(log_root, output_dir, selected)
+    manifest_integrity = manifest.get("input_integrity", {})
+    if expected_input_integrity is not None:
+        require_matching_artifact_identity(manifest_integrity, expected_input_integrity)
+    if selected.name != "baseline":
+        from .checkpoint import validate_run_binding
+
+        run_identity = manifest.get("run_identity")
+        if not isinstance(run_identity, dict):
+            raise RuntimeError("Frontier full-run manifest has no run identity.")
+        if expected_input_integrity is None:
+            raise RuntimeError(
+                "Frontier verification requires an artifact lock identity."
+            )
+        if run_identity.get("input_artifact_identity") != artifact_identity(
+            expected_input_integrity
+        ):
+            raise RuntimeError(
+                "Frontier run identity does not match the artifact lock."
+            )
+        if (
+            run_identity.get("profile") != selected.name
+            or run_identity.get("stage") != selected.full_stage
+            or run_identity.get("output_dir") != str(output_dir)
+        ):
+            raise RuntimeError("Frontier run identity profile/stage/output is invalid.")
+        validate_run_binding(output_dir, expected_run_identity=run_identity)
     validate_training_contract(
         manifest.get("resolved_config", {}),
         manifest.get("custom_loss", {}),
-        FULL_STAGE,
+        selected.full_stage,
+        profile=selected,
     )
-    current_fingerprint = _verify_manifest_fingerprint(manifest, project_root)
+    current_fingerprint = _verify_manifest_fingerprint(manifest, project_root, selected)
     verified_outputs = verify_output_artifacts(
         output_dir, manifest.get("output_artifacts", {})
     )
@@ -176,6 +230,10 @@ def verify_adapter_files(
 
     return {
         "adapter_config": str(adapter_config_path),
+        "profile": selected.name,
+        "input_artifact_identity": (
+            artifact_identity(manifest_integrity) if manifest_integrity else None
+        ),
         "adapter_weights": str(adapter_weights_path),
         "adapter_sha256": sha256_file(adapter_weights_path),
         "adapter_bytes": adapter_weights_path.stat().st_size,

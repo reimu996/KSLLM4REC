@@ -11,8 +11,9 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterator
 
+from .profiles import BASELINE_PROFILE
 
-DATASET_NAME = "hf_kuaishou_llmrec_sft_baseline_0_91"
+DATASET_NAME = BASELINE_PROFILE.dataset_name
 REQUIRED_FIELDS = ("system", "prompt", "response")
 
 
@@ -106,7 +107,49 @@ def _atomic_json(path: Path, value: object) -> None:
             os.unlink(temp_name)
 
 
-def prepare_dataset(source_path: Path, output_dir: Path) -> DataReport:
+def expected_dataset_info(dataset_name: str, derived_filename: str) -> dict:
+    if not dataset_name:
+        raise ValueError("dataset_name must not be empty.")
+    if not derived_filename:
+        raise ValueError("derived_filename must not be empty.")
+    return {
+        dataset_name: {
+            "file_name": derived_filename,
+            "formatting": "alpaca",
+            "columns": {
+                "prompt": "instruction",
+                "query": "input",
+                "response": "output",
+                "system": "system",
+            },
+        }
+    }
+
+
+def validate_dataset_info(
+    path: Path, *, dataset_name: str, derived_filename: str
+) -> dict:
+    try:
+        actual = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Invalid dataset_info.json at {path}: {exc}") from exc
+    expected = expected_dataset_info(dataset_name, derived_filename)
+    if actual != expected:
+        raise RuntimeError(
+            f"dataset_info.json does not exactly match dataset {dataset_name!r}: "
+            f"expected {expected!r}, got {actual!r}"
+        )
+    return actual
+
+
+def prepare_dataset(
+    source_path: Path,
+    output_dir: Path,
+    *,
+    dataset_name: str = DATASET_NAME,
+) -> DataReport:
+    if not dataset_name:
+        raise ValueError("dataset_name must not be empty.")
     source_path = source_path.resolve()
     output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -161,18 +204,7 @@ def prepare_dataset(source_path: Path, output_dir: Path) -> DataReport:
             "Derived data did not preserve source record content exactly."
         )
 
-    dataset_info = {
-        DATASET_NAME: {
-            "file_name": derived_path.name,
-            "formatting": "alpaca",
-            "columns": {
-                "prompt": "instruction",
-                "query": "input",
-                "response": "output",
-                "system": "system",
-            },
-        }
-    }
+    dataset_info = expected_dataset_info(dataset_name, derived_path.name)
     _atomic_json(output_dir / "dataset_info.json", dataset_info)
 
     report = DataReport(

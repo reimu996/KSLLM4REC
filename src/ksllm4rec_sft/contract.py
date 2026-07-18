@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from typing import Any
 
+from .profiles import (
+    BASELINE_PROFILE,
+    MODEL_PATH as PROFILE_MODEL_PATH,
+    SFTProfile,
+    get_profile,
+)
 
-MODEL_PATH = "/home/lyc/models/OneReason-0.8B-pretrain-competition"
-DATASET_DIR = "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/data/hf_baseline_091"
-DATASET_NAME = "hf_kuaishou_llmrec_sft_baseline_0_91"
+# Backwards-compatible aliases for the original approved baseline contract.
+MODEL_PATH = str(PROFILE_MODEL_PATH)
+DATASET_DIR = str(BASELINE_PROFILE.dataset_dir)
+DATASET_NAME = BASELINE_PROFILE.dataset_name
 TARGET_MODULES = {
     "q_proj",
     "k_proj",
@@ -18,14 +26,9 @@ TARGET_MODULES = {
     "up_proj",
     "down_proj",
 }
-GATE_CUTOFFS = {
-    "gate_00512": 512,
-    "gate_02048": 2048,
-    "gate_08192": 8192,
-    "gate_16384": 16384,
-}
-FULL_STAGE = "full_epoch_001"
-CONFIG_CHECK_STAGE = "config_check"
+GATE_CUTOFFS = dict(BASELINE_PROFILE.gate_cutoffs)
+FULL_STAGE = BASELINE_PROFILE.full_stage
+CONFIG_CHECK_STAGE = BASELINE_PROFILE.config_check_stage
 
 
 def _normalise_targets(value: Any) -> set[str]:
@@ -43,21 +46,18 @@ def _same(actual: Any, expected: Any) -> bool:
     return actual == expected
 
 
-def _requested_cutoff(run_stage: str) -> int:
-    if run_stage in (FULL_STAGE, CONFIG_CHECK_STAGE):
-        return 16384
-    if run_stage in GATE_CUTOFFS:
-        return GATE_CUTOFFS[run_stage]
-    raise RuntimeError(f"Unapproved SFT run stage: {run_stage!r}")
-
-
 def validate_training_contract(
-    config: dict[str, Any], custom_loss: dict[str, Any], run_stage: str
+    config: dict[str, Any],
+    custom_loss: dict[str, Any],
+    run_stage: str,
+    *,
+    profile: str | SFTProfile = BASELINE_PROFILE,
 ) -> dict[str, Any]:
     """Reject any request that differs from the user-approved configuration."""
 
-    cutoff = _requested_cutoff(run_stage)
-    max_steps = 1 if run_stage in GATE_CUTOFFS else -1
+    selected = get_profile(profile)
+    cutoff = selected.stage_cutoff(run_stage)
+    max_steps = 1 if run_stage in selected.gate_cutoffs else -1
     expected = {
         "model_name_or_path": MODEL_PATH,
         "trust_remote_code": True,
@@ -71,8 +71,8 @@ def validate_training_contract(
         "lora_dropout": 0.05,
         "additional_target": None,
         "pure_bf16": False,
-        "dataset": DATASET_NAME,
-        "dataset_dir": DATASET_DIR,
+        "dataset": selected.dataset_name,
+        "dataset_dir": str(selected.dataset_dir),
         "template": "qwen3_nothink",
         "cutoff_len": cutoff,
         "packing": True,
@@ -130,10 +130,25 @@ def validate_training_contract(
                 f"custom_loss.{key}: expected {expected_value!r}, got {custom_loss.get(key)!r}"
             )
     resume = config.get("resume_from_checkpoint")
-    if run_stage != FULL_STAGE and resume is not None:
+    if run_stage != selected.full_stage and resume is not None:
         mismatches.append(
-            f"resume_from_checkpoint: only {FULL_STAGE!r} may resume, got {resume!r}"
+            "resume_from_checkpoint: only "
+            f"{selected.full_stage!r} may resume for profile {selected.name!r}, "
+            f"got {resume!r}"
         )
+    output_dir = Path(str(config.get("output_dir", ""))).resolve()
+    if selected is not BASELINE_PROFILE and run_stage == selected.full_stage:
+        if output_dir != selected.full_output_dir.resolve():
+            mismatches.append(
+                "output_dir: expected full-run directory "
+                f"{str(selected.full_output_dir.resolve())!r}, got {str(output_dir)!r}"
+            )
+    elif selected is not BASELINE_PROFILE and run_stage in selected.gate_cutoffs:
+        if not output_dir.is_relative_to(selected.gate_output_root.resolve()):
+            mismatches.append(
+                "output_dir: gate output must be under "
+                f"{str(selected.gate_output_root.resolve())!r}, got {str(output_dir)!r}"
+            )
     if mismatches:
         raise RuntimeError(
             "Training request violates the approved fixed configuration:\n- "
@@ -141,6 +156,9 @@ def validate_training_contract(
         )
     return {
         "status": "passed",
+        "profile": selected.name,
+        "dataset": selected.dataset_name,
+        "dataset_dir": str(selected.dataset_dir),
         "run_stage": run_stage,
         "requested_cutoff_len": cutoff,
         "max_steps": max_steps,
@@ -157,11 +175,13 @@ def validate_parsed_contract(
     finetuning_args,
     *,
     requested_cutoff: int,
+    profile: str | SFTProfile = BASELINE_PROFILE,
 ) -> dict[str, Any]:
     """Verify important values after LLaMA-Factory has transformed arguments."""
 
     import torch
 
+    selected = get_profile(profile)
     checks = {
         "model_name_or_path": (
             str(model_args.model_name_or_path),
@@ -170,7 +190,7 @@ def validate_parsed_contract(
         "flash_attn": (str(model_args.flash_attn), "fa2"),
         "compute_dtype": (model_args.compute_dtype, torch.bfloat16),
         "block_diag_attn": (model_args.block_diag_attn, True),
-        "dataset": (list(data_args.dataset), [DATASET_NAME]),
+        "dataset": (list(data_args.dataset), [selected.dataset_name]),
         "template": (data_args.template, "qwen3_nothink"),
         "packing": (data_args.packing, True),
         "neat_packing": (data_args.neat_packing, True),
@@ -206,6 +226,8 @@ def validate_parsed_contract(
         )
     return {
         "status": "passed",
+        "profile": selected.name,
+        "dataset": selected.dataset_name,
         "internal_cutoff_len": data_args.cutoff_len,
         "packed_sequence_len": data_args.cutoff_len + 1,
         "gradient_accumulation_steps": training_args.gradient_accumulation_steps,

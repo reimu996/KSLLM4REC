@@ -12,9 +12,10 @@ from transformers import AutoTokenizer
 from llamafactory.data import Role, TEMPLATES
 
 from .data import iter_derived_records, render_qwen3_nothink
-from .integrity import verify_artifact_lock
+from .integrity import validate_profile_artifact_identity, verify_artifact_lock
 from .item_tokens import build_item_token_ids
 from .manifest import atomic_write_json
+from .profiles import BASELINE_PROFILE, SFTProfile, get_profile
 
 
 def _percentile(sorted_values: list[int], quantile: float) -> int:
@@ -24,6 +25,45 @@ def _percentile(sorted_values: list[int], quantile: float) -> int:
     return sorted_values[max(0, min(index, len(sorted_values) - 1))]
 
 
+def _validate_locked_paths(
+    model_path: Path, derived_path: Path, integrity: dict
+) -> None:
+    locked_model = Path(integrity["model_root"]).resolve()
+    locked_derived = Path(integrity["derived_dataset"]["path"]).resolve()
+    if model_path.resolve() != locked_model:
+        raise RuntimeError(
+            f"Preflight model path must match artifact lock: "
+            f"expected {locked_model}, got {model_path.resolve()}"
+        )
+    if derived_path.resolve() != locked_derived:
+        raise RuntimeError(
+            f"Preflight data path must match artifact lock: "
+            f"expected {locked_derived}, got {derived_path.resolve()}"
+        )
+
+
+def _record_count_blocker(integrity: dict | None, actual_records: int) -> str | None:
+    if integrity is None:
+        return None
+    locked_records = integrity["derived_dataset"].get("records")
+    if locked_records == actual_records:
+        return None
+    return (
+        "Derived dataset record count does not match artifact lock: "
+        f"expected {locked_records!r}, got {actual_records}."
+    )
+
+
+def _internal_cutoff(requested_cutoff_len: int) -> int:
+    if requested_cutoff_len < 2:
+        raise ValueError("requested cutoff_len must be at least 2.")
+    return requested_cutoff_len - 1
+
+
+def _exceeds_internal_cutoff(length: int, requested_cutoff_len: int) -> bool:
+    return length > _internal_cutoff(requested_cutoff_len)
+
+
 def tokenizer_preflight(
     model_path: Path,
     derived_path: Path,
@@ -31,7 +71,10 @@ def tokenizer_preflight(
     *,
     cutoff_len: int = 16384,
     artifact_lock: Path | None = None,
+    profile: str | SFTProfile = BASELINE_PROFILE,
 ) -> dict:
+    selected = get_profile(profile)
+    internal_cutoff_len = _internal_cutoff(cutoff_len)
     integrity = (
         verify_artifact_lock(
             artifact_lock,
@@ -40,6 +83,9 @@ def tokenizer_preflight(
         if artifact_lock is not None
         else None
     )
+    if integrity is not None:
+        validate_profile_artifact_identity(integrity, selected)
+        _validate_locked_paths(model_path, derived_path, integrity)
     tokenizer = AutoTokenizer.from_pretrained(
         model_path, trust_remote_code=True, local_files_only=True
     )
@@ -93,9 +139,9 @@ def tokenizer_preflight(
         )
         counters["responses_with_think_text"] += "<think>" in record.response
         counters["targets_with_think_token"] += think_token_id in target_ids
-        if target_len > cutoff_len:
+        if _exceeds_internal_cutoff(target_len, cutoff_len):
             counters["target_over_cutoff"] += 1
-        if total_len > cutoff_len:
+        if _exceeds_internal_cutoff(total_len, cutoff_len):
             counters["total_over_cutoff"] += 1
         lengths.append(total_len)
         source_lengths.append(source_len)
@@ -107,6 +153,7 @@ def tokenizer_preflight(
     target_lengths.sort()
     longest.sort(reverse=True)
     report = {
+        "profile": selected.name,
         "model_path": str(model_path.resolve()),
         "derived_path": str(derived_path.resolve()),
         "records": len(lengths),
@@ -121,6 +168,8 @@ def tokenizer_preflight(
             "render_equivalence_checked_lines": render_check_lines,
         },
         "cutoff_len": cutoff_len,
+        "requested_cutoff_len": cutoff_len,
+        "internal_cutoff_len": internal_cutoff_len,
         "total_over_cutoff": counters["total_over_cutoff"],
         "target_over_cutoff": counters["target_over_cutoff"],
         "lengths": {
@@ -146,13 +195,18 @@ def tokenizer_preflight(
         ],
     }
     blockers = []
+    record_count_blocker = _record_count_blocker(integrity, len(lengths))
+    if record_count_blocker is not None:
+        blockers.append(record_count_blocker)
     if counters["target_over_cutoff"]:
         blockers.append(
-            "At least one response exceeds cutoff_len; response truncation is forbidden."
+            "At least one response exceeds the internal cutoff_len="
+            f"{internal_cutoff_len}; response truncation is forbidden."
         )
     if counters["total_over_cutoff"]:
         blockers.append(
-            "At least one full sample exceeds cutoff_len; explicit prompt left-cropping is required before training."
+            "At least one full sample exceeds the internal cutoff_len="
+            f"{internal_cutoff_len}; truncation is forbidden."
         )
     report["status"] = "failed" if blockers else "passed"
     report["blockers"] = blockers
