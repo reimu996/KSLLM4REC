@@ -1,0 +1,33 @@
+# OneReason-0.8B Frontier SFT Epoch 2 -> GRPO LoRA - Epoch {{EPOCH}}
+
+This repository contains one LoRA adapter checkpoint for the Kuaishou LLM4Rec
+competition.
+
+## Training
+
+- Start adapter: official Frontier SFT Epoch 2
+- Method: online GRPO with eight live legal-SID candidates per group
+- Frontier GRPO data: 17,016 normalized recommendation groups x 2 epochs
+- Prompt rule: `/think` and `/no_think` are normalized to `/no_think`
+- Reward target: the final SID after `</think>`; the original thinking text is
+  not used as a reward signal
+- Forced-GT safeguard: probability 0.5 when a group has no live GT hit
+- Advantage: group sample Z-score with standard-deviation correction 1
+- Completed epoch: {{EPOCH}}
+- LoRA rank / alpha / dropout: 32 / 32 / 0.0
+- Target modules: `q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`,
+  `up_proj`, `down_proj`
+
+## Files
+
+- `adapter_model.safetensors`: LoRA weights
+- `adapter_config.json`: the original checkpoint configuration, preserved
+  byte-for-byte
+
+The clean base model is not included in this repository. Load this adapter on
+the competition-approved OneReason-0.8B base model.
+
+## Evaluation status
+
+Only a local Frontier-derived constrained beam-16 probe was used for
+diagnostics. No official competition score or improvement claim is made here.

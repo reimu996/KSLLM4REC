@@ -9,13 +9,7 @@ from importlib.metadata import version
 from pathlib import Path
 from typing import Any, Iterable
 
-from .contract import (
-    BASE_MODEL_SHA256,
-    GROUPS_SHA256,
-    SFT_ADAPTER_SHA256,
-    SFT_CONFIG_SHA256,
-    TRIE_MANIFEST_SHA256,
-)
+from .contract import profile_for_config
 from .integrity import require_file, sha256_file
 
 
@@ -35,6 +29,7 @@ _RUNTIME_CODE_FILES = (
     "ksllm4rec_grpo/modeling.py",
     "ksllm4rec_grpo/objective.py",
     "ksllm4rec_grpo/probability.py",
+    "ksllm4rec_grpo/profiles.py",
     "ksllm4rec_grpo/prompt.py",
     "ksllm4rec_grpo/rollout.py",
     "ksllm4rec_grpo/scoring.py",
@@ -51,6 +46,7 @@ _PROBE_CODE_FILES = (
     "ksllm4rec_grpo/modeling.py",
     "ksllm4rec_grpo/probability.py",
     "ksllm4rec_grpo/probe.py",
+    "ksllm4rec_grpo/profiles.py",
     "ksllm4rec_grpo/prompt.py",
     "ksllm4rec_grpo/trie.py",
     "ksllm4rec_orpo/data.py",
@@ -80,16 +76,19 @@ def software_versions() -> dict[str, str]:
 
 
 def frozen_model_inputs(config: dict[str, Any]) -> dict[str, Any]:
+    profile = profile_for_config(config)
     base = Path(config["model"]["base_model"])
     adapter = Path(config["model"]["sft_adapter"])
     tokenizer = Path(config["model"]["tokenizer"])
     records = {
-        "base_weights": require_file(base / "model.safetensors", BASE_MODEL_SHA256),
+        "base_weights": require_file(
+            base / "model.safetensors", "28e66d2ec528473d335ede2b3faa08eddc53eb8ec93747a449e5e7ec812ede90"
+        ),
         "sft_adapter": require_file(
-            adapter / "adapter_model.safetensors", SFT_ADAPTER_SHA256
+            adapter / "adapter_model.safetensors", profile.adapter_sha256
         ),
         "sft_adapter_config": require_file(
-            adapter / "adapter_config.json", SFT_CONFIG_SHA256
+            adapter / "adapter_config.json", profile.adapter_config_sha256
         ),
     }
     ancillary = {
@@ -105,10 +104,25 @@ def frozen_model_inputs(config: dict[str, Any]) -> dict[str, Any]:
         "tokenizer_vocab": tokenizer / "vocab.json",
     }
     for name, path in ancillary.items():
+        if profile.provenance is None:
+            if not path.is_file():
+                raise FileNotFoundError(path)
+            records[name] = {
+                "path": str(path.resolve()),
+                "size": path.stat().st_size,
+                "sha256": sha256_file(path),
+            }
+            continue
+        # Official platform exports contain tokenizer.json/config/chat_template
+        # but omit files that are already embedded in the clean base tokenizer.
+        # Record absence explicitly so the signature remains deterministic while
+        # still accepting the verified export layout.
         if not path.is_file():
-            raise FileNotFoundError(path)
+            records[name] = {"path": str(path.resolve()), "present": False}
+            continue
         records[name] = {
             "path": str(path.resolve()),
+            "present": True,
             "size": path.stat().st_size,
             "sha256": sha256_file(path),
         }
@@ -123,8 +137,36 @@ def _signature(inputs: dict[str, Any]) -> dict[str, Any]:
 def runtime_signature(
     config: dict[str, Any], groups_path: Path, trie_dir: Path
 ) -> dict[str, Any]:
-    groups_record = require_file(Path(groups_path), GROUPS_SHA256)
-    trie_record = require_file(Path(trie_dir) / "manifest.json", TRIE_MANIFEST_SHA256)
+    profile = profile_for_config(config)
+    groups_path = Path(groups_path)
+    trie_manifest_path = Path(trie_dir) / "manifest.json"
+    if not groups_path.is_file():
+        raise FileNotFoundError(groups_path)
+    if not trie_manifest_path.is_file():
+        raise FileNotFoundError(trie_manifest_path)
+    groups_record = {
+        "path": str(groups_path.resolve()),
+        "size": groups_path.stat().st_size,
+        "sha256": sha256_file(groups_path),
+    }
+    trie_record = {
+        "path": str(trie_manifest_path.resolve()),
+        "size": trie_manifest_path.stat().st_size,
+        "sha256": sha256_file(trie_manifest_path),
+    }
+    if profile.groups_sha256 is not None and groups_record["sha256"] != profile.groups_sha256:
+        raise RuntimeError(
+            f"Grouped data SHA256 mismatch: expected={profile.groups_sha256}, "
+            f"actual={groups_record['sha256']}"
+        )
+    if (
+        profile.trie_manifest_sha256 is not None
+        and trie_record["sha256"] != profile.trie_manifest_sha256
+    ):
+        raise RuntimeError(
+            f"Trie manifest SHA256 mismatch: expected={profile.trie_manifest_sha256}, "
+            f"actual={trie_record['sha256']}"
+        )
     inputs = {
         "config_sha256": hashlib.sha256(
             json.dumps(config, sort_keys=True, separators=(",", ":")).encode()

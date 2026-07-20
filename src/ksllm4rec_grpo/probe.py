@@ -16,12 +16,7 @@ from transformers import LogitsProcessorList
 from ksllm4rec_orpo.data import Sid
 
 from .constraint import RecommendationGrammar, RecommendationLogitsProcessor
-from .contract import (
-    EXPECTED_BASELINE_UNIQUE_SIDS,
-    EXPECTED_PROBE_REACHABLE,
-    FIXED_PROBE_SHA256,
-    TRIE_MANIFEST_SHA256,
-)
+from .contract import profile_for_config
 from .fingerprint import probe_algorithm_inputs
 from .integrity import require_file, sha256_file
 from .modeling import load_dual_adapter_model
@@ -29,8 +24,8 @@ from .prompt import encode_prompt
 from .trie import SidPrefixTrie
 
 
-def _load_probe(path: Path) -> list[dict[str, Any]]:
-    require_file(path, FIXED_PROBE_SHA256)
+def _load_probe(path: Path, expected_sha256: str) -> list[dict[str, Any]]:
+    require_file(path, expected_sha256)
     rows = []
     with path.open("r", encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
@@ -79,6 +74,7 @@ def _atomic_json(path: Path, value: Any) -> None:
 def probe_run_signature(
     config: dict[str, Any], policy_adapter_path: Path, trie_dir: Path
 ) -> dict[str, Any]:
+    profile = profile_for_config(config)
     fixed_probe = Path(config["evaluation"]["fixed_probe"])
     payload = {
         "adapter_weights_sha256": sha256_file(
@@ -87,8 +83,10 @@ def probe_run_signature(
         "adapter_config_sha256": sha256_file(
             policy_adapter_path / "adapter_config.json"
         ),
-        "trie_manifest": require_file(trie_dir / "manifest.json", TRIE_MANIFEST_SHA256),
-        "fixed_probe": require_file(fixed_probe, FIXED_PROBE_SHA256),
+        "trie_manifest": require_file(
+            trie_dir / "manifest.json", profile.trie_manifest_sha256
+        ),
+        "fixed_probe": require_file(fixed_probe, profile.fixed_probe_sha256),
         "num_beams": int(config["evaluation"]["num_beams"]),
         "max_completion_length": int(config["evaluation"]["max_completion_length"]),
         "algorithm": probe_algorithm_inputs(config),
@@ -132,6 +130,7 @@ def run_fixed_probe(
     output_dir: Path,
     device: str = "cuda:0",
 ) -> dict[str, Any]:
+    profile = profile_for_config(config)
     output_dir.mkdir(parents=True, exist_ok=True)
     policy_adapter_path = Path(policy_adapter_path).resolve()
     trie_dir = Path(trie_dir).resolve()
@@ -161,17 +160,20 @@ def run_fixed_probe(
                 raise RuntimeError("Existing probe report failed input binding checks.")
             if len(predictions) == 1024:
                 return existing_report
-    rows = _load_probe(Path(config["evaluation"]["fixed_probe"]))
+    rows = _load_probe(
+        Path(config["evaluation"]["fixed_probe"]), profile.fixed_probe_sha256
+    )
     trie = SidPrefixTrie.load(
-        trie_dir, expected_leaf_count=EXPECTED_BASELINE_UNIQUE_SIDS
+        trie_dir, expected_leaf_count=profile.unique_sids
     )
     reachability = Counter()
     for row in rows:
         if trie.contains(Sid.parse(row["target_sid"])):
             reachability[row["task"]] += 1
-    if dict(reachability) != EXPECTED_PROBE_REACHABLE:
+    expected_reachable = dict(profile.probe_reachable or {})
+    if dict(reachability) != expected_reachable:
         raise RuntimeError(
-            f"Fixed probe reachability differs: expected={EXPECTED_PROBE_REACHABLE}, "
+            f"Fixed probe reachability differs: expected={expected_reachable}, "
             f"actual={dict(reachability)}"
         )
 
@@ -266,12 +268,12 @@ def run_fixed_probe(
         "run_signature": signature,
         "policy_adapter": str(Path(policy_adapter_path).resolve()),
         "beam_size": int(config["evaluation"]["num_beams"]),
-        "legal_sid_universe": "baseline_all_system_prompt_response_sids",
+        "legal_sid_universe": profile.trie_strategy,
         "rows": len(predictions),
         "seconds_this_invocation": time.monotonic() - started,
         "metrics": dict(metrics),
         "reachability_warning": (
-            "Targets outside the baseline trie are unreachable under this local proxy; "
+            "Targets outside the configured legal SID trie are unreachable under this local proxy; "
             "exact must be interpreted together with reachable_targets."
         ),
     }

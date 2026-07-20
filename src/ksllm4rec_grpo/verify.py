@@ -12,20 +12,8 @@ from typing import Any
 from ksllm4rec_orpo.data import Sid
 
 from .contract import (
-    EXPECTED_BASELINE_UNIQUE_SIDS,
-    EXPECTED_DOMAIN_A_NODES,
-    EXPECTED_DOMAIN_AB_NODES,
-    EXPECTED_DOMAIN_SIDS,
-    EXPECTED_PROBE_REACHABLE,
-    EXPECTED_RECOMMEND_GROUPS,
-    EXPECTED_RECOMMEND_ROWS,
-    EXPECTED_UNIQUE_RECOMMEND_POSITIVES,
-    FIXED_PROBE_SHA256,
-    GROUPS_SHA256,
     POSITIVE_SET_SIZE_DISTRIBUTION,
-    SFT_ADAPTER_SHA256,
-    SOURCE_DATA_SHA256,
-    TRIE_MANIFEST_SHA256,
+    profile_for_config,
 )
 from .data import RecommendationGroup, iter_groups
 from .fingerprint import runtime_signature
@@ -37,6 +25,7 @@ from .objective import (
 )
 from .probe import probe_run_signature
 from .trie import SidPrefixTrie
+from .trainer import training_schedule
 
 
 def _load_json(path: Path) -> Any:
@@ -88,14 +77,19 @@ def _require_adapter(path: Path) -> dict[str, Any]:
 def _verify_inputs(
     config: dict[str, Any], groups_path: Path, trie_dir: Path
 ) -> tuple[list[RecommendationGroup], SidPrefixTrie, dict[str, Any]]:
+    profile = profile_for_config(config)
     manifest = _load_json(groups_path.parent / "data_manifest.json")
+    source_record = manifest.get("source") or manifest.get("source_lock", {}).get(
+        "source"
+    )
     if (
-        manifest["source"]["sha256"] != SOURCE_DATA_SHA256
-        or sha256_file(groups_path) != GROUPS_SHA256
-        or manifest["groups"]["sha256"] != GROUPS_SHA256
-        or manifest["groups"]["rows"] != EXPECTED_RECOMMEND_GROUPS
-        or manifest["positive_rows"] != EXPECTED_RECOMMEND_ROWS
-        or manifest["unique_positive_sids"] != EXPECTED_UNIQUE_RECOMMEND_POSITIVES
+        not isinstance(source_record, dict)
+        or source_record.get("sha256") != profile.source_sha256
+        or sha256_file(groups_path) != profile.groups_sha256
+        or manifest["groups"]["sha256"] != profile.groups_sha256
+        or manifest["groups"]["rows"] != profile.groups
+        or manifest["positive_rows"] != profile.positives
+        or manifest["unique_positive_sids"] != profile.unique_positive_sids
     ):
         raise RuntimeError("Grouped-data manifest differs from the frozen input.")
     groups = list(iter_groups(groups_path))
@@ -103,29 +97,32 @@ def _verify_inputs(
     unique_positives = len({sid for group in groups for sid in group.positive_sids})
     distribution = dict(Counter(len(group.positive_sids) for group in groups))
     if (
-        len(groups) != EXPECTED_RECOMMEND_GROUPS
-        or positive_rows != EXPECTED_RECOMMEND_ROWS
-        or unique_positives != EXPECTED_UNIQUE_RECOMMEND_POSITIVES
-        or distribution != POSITIVE_SET_SIZE_DISTRIBUTION
+        len(groups) != profile.groups
+        or positive_rows != profile.positives
+        or unique_positives != profile.unique_positive_sids
+        or (
+            profile.provenance is None
+            and distribution != POSITIVE_SET_SIZE_DISTRIBUTION
+        )
     ):
         raise RuntimeError("Grouped data content differs from the frozen contract.")
-    if sha256_file(trie_dir / "manifest.json") != TRIE_MANIFEST_SHA256:
+    if sha256_file(trie_dir / "manifest.json") != profile.trie_manifest_sha256:
         raise RuntimeError("Trie manifest hash differs from the frozen contract.")
     trie = SidPrefixTrie.load(
-        trie_dir, expected_leaf_count=EXPECTED_BASELINE_UNIQUE_SIDS
+        trie_dir, expected_leaf_count=profile.unique_sids
     )
     if (
-        trie.metadata.get("source_sha256") != SOURCE_DATA_SHA256
-        or trie.metadata.get("strategy") != "baseline_all_system_prompt_response_sids"
-        or trie.counts["a_nodes"] != EXPECTED_DOMAIN_A_NODES
-        or trie.counts["ab_nodes"] != EXPECTED_DOMAIN_AB_NODES
+        trie.metadata.get("source_sha256") != profile.source_sha256
+        or trie.metadata.get("strategy") != profile.trie_strategy
+        or trie.counts["a_nodes"] != profile.domain_a_nodes
+        or trie.counts["ab_nodes"] != profile.domain_ab_nodes
         or {
             domain: trie.counts["by_domain"][domain]["leaves"]
-            for domain in EXPECTED_DOMAIN_SIDS
+            for domain in profile.domain_sids
         }
-        != EXPECTED_DOMAIN_SIDS
+        != dict(profile.domain_sids)
     ):
-        raise RuntimeError("Baseline trie differs from the frozen contract.")
+        raise RuntimeError("Configured SID trie differs from the frozen contract.")
     return groups, trie, runtime_signature(config, groups_path, trie_dir)
 
 
@@ -298,6 +295,7 @@ def _verify_probe(
     adapter_dir: Path,
     output_dir: Path,
 ) -> dict[str, Any]:
+    profile = profile_for_config(config)
     expected_signature = probe_run_signature(config, adapter_dir, trie_dir)
     if _load_json(output_dir / "probe_state.json") != expected_signature:
         raise RuntimeError(f"Probe state is not bound to {adapter_dir}.")
@@ -305,7 +303,10 @@ def _verify_probe(
     if report.get("run_signature") != expected_signature:
         raise RuntimeError(f"Probe report is not bound to {adapter_dir}.")
     source_rows = _load_jsonl(Path(config["evaluation"]["fixed_probe"]))
-    if sha256_file(Path(config["evaluation"]["fixed_probe"])) != FIXED_PROBE_SHA256:
+    if (
+        sha256_file(Path(config["evaluation"]["fixed_probe"]))
+        != profile.fixed_probe_sha256
+    ):
         raise RuntimeError("Fixed probe input hash changed.")
     predictions = _load_jsonl(output_dir / "predictions.jsonl")
     if len(source_rows) != 1024 or len(predictions) != 1024:
@@ -339,7 +340,7 @@ def _verify_probe(
         bucket["valid_predictions"] += int(valid)
         bucket["exact"] += int(exact)
         bucket["exact_reachable"] += int(exact and reachable)
-    for task, expected_reachable in EXPECTED_PROBE_REACHABLE.items():
+    for task, expected_reachable in dict(profile.probe_reachable or {}).items():
         if metrics[task]["reachable_targets"] != expected_reachable:
             raise RuntimeError(f"Probe reachability changed for {task}.")
         if dict(metrics[task]) != report["metrics"][task]:
@@ -358,20 +359,22 @@ def verify_run(
     probe_root: Path,
     gate_root: Path,
 ) -> dict[str, Any]:
+    profile = profile_for_config(config)
     groups, trie, signature = _verify_inputs(config, groups_path, trie_dir)
     gates = _verify_gates(config, gate_root, signature)
     group_count = len(groups)
     expected_total_groups = group_count * int(config["train"]["epochs"])
 
+    epochs = int(config["train"]["epochs"])
     adapters = {
         f"epoch_{epoch:03d}": _require_adapter(run_dir / f"epoch_{epoch:03d}")
-        for epoch in (1, 2)
+        for epoch in range(1, epochs + 1)
     }
     adapter_hashes = [
         adapters[key]["adapter_model.safetensors"]["sha256"]
-        for key in ("epoch_001", "epoch_002")
+        for key in sorted(adapters)
     ]
-    if len(set(adapter_hashes)) != 2 or SFT_ADAPTER_SHA256 in adapter_hashes:
+    if len(set(adapter_hashes)) != epochs or profile.adapter_sha256 in adapter_hashes:
         raise RuntimeError("Epoch adapters did not change independently from SFT.")
 
     summary = _load_json(run_dir / "run_summary.json")
@@ -388,10 +391,11 @@ def verify_run(
         or final_rollout_chunk not in permitted_chunks
     ):
         raise RuntimeError("Final chunk is not an approved unified OOM fallback.")
+    total_steps, _ = training_schedule(config, group_count)
     expected_state = {
-        "epoch_index": 3,
+        "epoch_index": epochs + 1,
         "next_group_offset": 0,
-        "global_step": 1596,
+        "global_step": total_steps,
         "groups_completed": expected_total_groups,
         "rollout_chunk": final_rollout_chunk,
         "loss_chunk": final_loss_chunk,
@@ -407,7 +411,7 @@ def verify_run(
         run_dir / "recovery" / latest["checkpoint"] / "manifest.json"
     )
     if (
-        latest["global_step"] != 1596
+        latest["global_step"] != total_steps
         or recovery_manifest["contract_signature"] != signature
         or recovery_manifest["cursor"] != expected_state
     ):
@@ -415,7 +419,7 @@ def verify_run(
 
     audit = _load_jsonl(run_dir / "train_audit.jsonl")
     progress = _load_jsonl(run_dir / "train_progress.jsonl")
-    if len(audit) != expected_total_groups or len(progress) != 1596:
+    if len(audit) != expected_total_groups or len(progress) != total_steps:
         raise RuntimeError("Training audit/progress row counts are incomplete.")
     previous_chunk = initial_chunk
     for index, row in enumerate(progress, start=1):
@@ -476,8 +480,12 @@ def verify_run(
         audit_counts["live_exact"] += int(row["has_live_gt"])
         audit_counts["signal"] += int(any(row["advantages"]))
         audit_counts[f"epoch_{epoch}"] += 1
-    for step in range(1, 1597):
-        expected = 2 if step in (798, 1596) else 8
+    accumulation = int(config["train"]["gradient_accumulation_groups"])
+    steps_per_epoch = math.ceil(group_count / accumulation)
+    tail = group_count % accumulation
+    for step in range(1, total_steps + 1):
+        final_step_in_epoch = step % steps_per_epoch == 0
+        expected = tail if final_step_in_epoch and tail else accumulation
         if step_sizes[step] != expected or progress[step - 1]["optimizer_step"] != step:
             raise RuntimeError(f"Optimizer step {step} has an invalid group reduction.")
     if (
@@ -497,10 +505,10 @@ def verify_run(
             run_dir / f"epoch_{epoch:03d}",
             probe_root / f"epoch_{epoch:03d}",
         )
-        for epoch in (1, 2)
+        for epoch in range(1, epochs + 1)
     }
     return {
-        "spec_version": "3.1",
+        "spec_version": config["spec_version"],
         "passed": True,
         "runtime_signature": signature,
         "adapters": adapters,

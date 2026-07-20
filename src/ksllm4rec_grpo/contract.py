@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .profiles import (
+    BASELINE_PROFILE,
+    GRPOProfile,
+    get_profile,
+)
+
 
 SPEC_VERSION = "3.1"
 SCHEMA_VERSION = 3
@@ -99,3 +105,40 @@ EXPECTED_TOKEN_IDS = {
     "living": 176_249,
     "ad": 176_251,
 }
+
+
+def profile_for_config(config: dict | None = None) -> GRPOProfile:
+    """Resolve the frozen input contract without changing V3.1 aliases.
+
+    Older callers pass no config and therefore receive the original baseline
+    contract.  New callers pass the parsed YAML, whose ``profile`` field
+    selects the Frontier contract.
+    """
+
+    if config is None:
+        return BASELINE_PROFILE
+    name = config.get("profile") or config.get("profile_name")
+    if name is None:
+        # The historical file predates named profiles and is unambiguously V3.1.
+        return BASELINE_PROFILE
+    return get_profile(str(name))
+
+
+def expected_trie_leaf_count(config: dict | None = None) -> int:
+    return profile_for_config(config).unique_sids
+
+
+def expected_trie_node_counts(config: dict | None = None) -> tuple[int, int]:
+    profile = profile_for_config(config)
+    return profile.domain_a_nodes, profile.domain_ab_nodes
+
+
+def expected_data_counts(config: dict | None = None) -> dict[str, int]:
+    profile = profile_for_config(config)
+    return {
+        "source_rows": profile.source_rows,
+        "recommend_rows": profile.recommend_rows,
+        "groups": profile.groups,
+        "positives": profile.positives,
+        "unique_positive_sids": profile.unique_positive_sids,
+    }

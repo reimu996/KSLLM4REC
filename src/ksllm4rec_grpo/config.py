@@ -1,4 +1,4 @@
-"""Strict configuration loading for the approved GRPO Spec V3.1."""
+"""Strict configuration loading for named GRPO experiment profiles."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from .profiles import FRONTIER_PROFILE
 
 
 EXPECTED_VALUES: dict[str, Any] = {
@@ -82,6 +84,35 @@ EXPECTED_VALUES: dict[str, Any] = {
     "output.log_dir": "/home/lyc/REC_PROJECTS/KSLLM4REC/operation_logs/grpo/v3_1",
 }
 
+# The Frontier profile intentionally has the same algorithmic values as V3.1.
+# Only frozen data/model identities, derived-artifact locations, and the timing
+# gate differ.  Keeping this map explicit makes accidental parameter drift
+# fail at config load time.
+FRONTIER_EXPECTED_VALUES: dict[str, Any] = dict(EXPECTED_VALUES)
+FRONTIER_EXPECTED_VALUES.update(
+    {
+        "schema_version": FRONTIER_PROFILE.schema_version,
+        "spec_version": FRONTIER_PROFILE.spec_version,
+        "profile": FRONTIER_PROFILE.name,
+        "model.sft_adapter": str(FRONTIER_PROFILE.sft_adapter),
+        "model.tokenizer": str(FRONTIER_PROFILE.tokenizer),
+        "data.source": str(FRONTIER_PROFILE.source),
+        "data.provenance": str(FRONTIER_PROFILE.provenance),
+        "data.groups": FRONTIER_PROFILE.groups,
+        "data.positives": FRONTIER_PROFILE.positives,
+        "trie.strategy": FRONTIER_PROFILE.trie_strategy,
+        "trie.unique_sids": FRONTIER_PROFILE.unique_sids,
+        "trie.domain_a_nodes": FRONTIER_PROFILE.domain_a_nodes,
+        "trie.domain_ab_nodes": FRONTIER_PROFILE.domain_ab_nodes,
+        "gates.max_projected_hours": 72.0,
+        "evaluation.fixed_probe": str(FRONTIER_PROFILE.fixed_probe),
+        "output.groups_dir": str(FRONTIER_PROFILE.groups_dir),
+        "output.trie_dir": str(FRONTIER_PROFILE.trie_dir),
+        "output.run_dir": str(FRONTIER_PROFILE.run_dir),
+        "output.log_dir": str(FRONTIER_PROFILE.log_dir),
+    }
+)
+
 
 def _flatten(value: dict[str, Any], prefix: str = "") -> dict[str, Any]:
     result: dict[str, Any] = {}
@@ -99,16 +130,28 @@ def load_config(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("GRPO config must be a mapping.")
     actual = _flatten(value)
-    missing = sorted(set(EXPECTED_VALUES) - set(actual))
-    unknown = sorted(set(actual) - set(EXPECTED_VALUES))
+    profile_name = actual.get("profile")
+    if profile_name is None:
+        expected_values = EXPECTED_VALUES
+        profile_label = "Spec V3.1"
+    elif profile_name == FRONTIER_PROFILE.name:
+        expected_values = FRONTIER_EXPECTED_VALUES
+        profile_label = f"profile {FRONTIER_PROFILE.name!r}"
+    else:
+        raise ValueError(
+            f"Unknown GRPO profile {profile_name!r}; expected historical V3.1 "
+            f"config or {FRONTIER_PROFILE.name!r}."
+        )
+    missing = sorted(set(expected_values) - set(actual))
+    unknown = sorted(set(actual) - set(expected_values))
     mismatches = {
         key: {"expected": expected, "actual": actual.get(key)}
-        for key, expected in EXPECTED_VALUES.items()
+        for key, expected in expected_values.items()
         if key in actual and actual[key] != expected
     }
     if missing or unknown or mismatches:
         raise ValueError(
-            "GRPO config differs from Spec V3.1: "
+            f"GRPO config differs from {profile_label}: "
             f"missing={missing}, unknown={unknown}, mismatches={mismatches}"
         )
     return value

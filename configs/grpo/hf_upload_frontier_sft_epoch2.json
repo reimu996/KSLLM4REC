@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "profile": "frontier_sft_epoch2_grpo_v2",
+  "namespace": "reimu996",
+  "visibility": "public",
+  "artifact_root": "artifacts/grpo/hf_upload_frontier_sft_epoch2",
+  "log_root": "operation_logs/grpo/frontier_sft_epoch2_hf_upload",
+  "required_uploaded_files": [
+    "README.md",
+    "adapter_config.json",
+    "adapter_model.safetensors"
+  ],
+  "allowed_hub_managed_files": [
+    ".gitattributes"
+  ],
+  "required_remote_files": [
+    ".gitattributes",
+    "README.md",
+    "adapter_config.json",
+    "adapter_model.safetensors"
+  ],
+  "commit_message": "Upload OneReason-0.8B Frontier SFT Epoch2 GRPO LoRA adapter",
+  "readme_template": {
+    "path": "configs/grpo/frontier_sft_epoch2_grpo_README.md.tmpl",
+    "size": 1301,
+    "sha256": "62872c42967e065604748936b17a457f34f01df2b169027d380d48aa98fa44c1"
+  },
+  "training": {
+    "title": "OneReason-0.8B Frontier SFT Epoch 2 -> Online GRPO LoRA",
+    "base_description": "OneReason-0.8B competition base with the official Frontier SFT Epoch 2 adapter",
+    "method": "online GRPO",
+    "method_details": "G=8 live legal-SID sampling, /think and /no_think prompt normalization, final-SID-only reward, forced-GT p=0.5, group sample Z-score, two epochs",
+    "data_label": "Frontier GRPO groups",
+    "data_value": "17,016 normalized groups x 2 epochs",
+    "lora_rank": 32,
+    "lora_alpha": 32,
+    "lora_dropout": 0.0,
+    "target_modules": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj",
+      "gate_proj",
+      "up_proj",
+      "down_proj"
+    ],
+    "evaluation_status": "Only a local Frontier-derived constrained beam-16 probe was run; no official competition score is claimed."
+  },
+  "provenance": {
+    "grpo_run_dir": "artifacts/grpo/runs/frontier_sft_epoch2_grpo_g8_forcedgt_p050_zscore_2epoch",
+    "source_dataset": "/home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1",
+    "source_dataset_policy": "raw direct/thinking records retained; /think and /no_think normalized; duplicate GTs collapsed only inside each positive SID set",
+    "recommendation_groups": 17016,
+    "raw_recommendation_rows": 30902,
+    "deduplicated_positive_edges": 30465,
+    "unique_positive_sids": 29414,
+    "legal_sid_leaves": 905469,
+    "readme_template": "configs/grpo/frontier_sft_epoch2_grpo_README.md.tmpl"
+  },
+  "repositories": [
+    {
+      "epoch": 1,
+      "repo_id": "reimu996/OneReason-0.8B-Frontier-SFT-Epoch2-GRPO-Epoch1",
+      "source_dir": "artifacts/grpo/runs/frontier_sft_epoch2_grpo_g8_forcedgt_p050_zscore_2epoch/epoch_001",
+      "adapter_model": {
+        "size": 80792456,
+        "sha256": "51787cf83fea5bfa11b1015acaf42236cbc3eec5bda22511e59f6e1ffb6f842c"
+      },
+      "adapter_config": {
+        "size": 1081,
+        "sha256": "28ab07197f42ec5b551622437a008721e4b7296bd12f79dd347e028c4d93de3e"
+      }
+    },
+    {
+      "epoch": 2,
+      "repo_id": "reimu996/OneReason-0.8B-Frontier-SFT-Epoch2-GRPO-Epoch2",
+      "source_dir": "artifacts/grpo/runs/frontier_sft_epoch2_grpo_g8_forcedgt_p050_zscore_2epoch/epoch_002",
+      "adapter_model": {
+        "size": 80792456,
+        "sha256": "6541a936c982af332c969da83e867fcad556e9125ac2db6947dd18082acc1724"
+      },
+      "adapter_config": {
+        "size": 1081,
+        "sha256": "28ab07197f42ec5b551622437a008721e4b7296bd12f79dd347e028c4d93de3e"
+      }
+    }
+  ]
+}

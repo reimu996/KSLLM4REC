@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import random
 import shutil
@@ -28,7 +29,7 @@ from .checkpoint import (
     save_recovery_checkpoint,
 )
 from .constraint import RecommendationGrammar
-from .contract import EXPECTED_BASELINE_UNIQUE_SIDS
+from .contract import expected_trie_leaf_count
 from .data import RecommendationGroup, iter_groups
 from .fingerprint import runtime_signature
 from .modeling import DualAdapterModel, load_dual_adapter_model
@@ -39,8 +40,23 @@ from .scoring import CompletionScores, score_completions
 from .trie import SidPrefixTrie
 
 
+# Backwards-compatible values for code importing the historical constants.
+# New runs derive these values from the configured group count below.
 TOTAL_OPTIMIZER_STEPS = 1_596
 WARMUP_STEPS = 48
+
+
+def training_schedule(config: dict[str, Any], groups_per_epoch: int) -> tuple[int, int]:
+    """Compute optimizer and warmup steps from the actual group stream."""
+
+    epochs = int(config["train"]["epochs"])
+    accumulation = int(config["train"]["gradient_accumulation_groups"])
+    if epochs < 1 or accumulation < 1 or groups_per_epoch < 1:
+        raise ValueError("epochs, accumulation, and groups must be positive")
+    steps_per_epoch = math.ceil(groups_per_epoch / accumulation)
+    total_steps = steps_per_epoch * epochs
+    warmup_steps = math.ceil(total_steps * float(config["train"]["warmup_ratio"]))
+    return total_steps, warmup_steps
 
 
 class PhaseOutOfMemory(RuntimeError):
@@ -393,6 +409,8 @@ def _optimizer_and_scheduler(bundle: DualAdapterModel, config: dict[str, Any]):
     ]
     if not parameters:
         raise RuntimeError("Policy has no trainable parameters.")
+    groups_per_epoch = int(config["data"]["groups"])
+    total_steps, warmup_steps = training_schedule(config, groups_per_epoch)
     optimizer = torch.optim.AdamW(
         parameters,
         lr=float(train["learning_rate"]),
@@ -403,8 +421,8 @@ def _optimizer_and_scheduler(bundle: DualAdapterModel, config: dict[str, Any]):
     )
     scheduler = get_cosine_schedule_with_warmup(
         optimizer,
-        num_warmup_steps=WARMUP_STEPS,
-        num_training_steps=TOTAL_OPTIMIZER_STEPS,
+        num_warmup_steps=warmup_steps,
+        num_training_steps=total_steps,
     )
     return optimizer, scheduler, parameters
 
@@ -463,6 +481,7 @@ def _reconcile_resume_outputs(
     state: RuntimeState,
     *,
     has_recovery: bool,
+    epochs: int,
 ) -> None:
     """Make append-only logs and epoch outputs exactly match the recovery cursor."""
 
@@ -481,7 +500,6 @@ def _reconcile_resume_outputs(
     if progress and progress[-1].get("groups_completed") != state.groups_completed:
         raise RuntimeError("Progress log and recovery group cursor differ.")
 
-    epochs = 2
     for epoch in range(1, epochs + 1):
         epoch_dir = output_dir / f"epoch_{epoch:03d}"
         if epoch >= state.epoch_index and epoch_dir.exists():
@@ -497,14 +515,10 @@ def _reconcile_resume_outputs(
 
 
 def _has_training_artifacts(output_dir: Path) -> bool:
-    names = (
-        "train_audit.jsonl",
-        "train_progress.jsonl",
-        "run_summary.json",
-        "epoch_001",
-        "epoch_002",
-    )
-    if any((output_dir / name).exists() for name in names):
+    names = ("train_audit.jsonl", "train_progress.jsonl", "run_summary.json")
+    if any((output_dir / name).exists() for name in names) or any(
+        output_dir.glob("epoch_[0-9][0-9][0-9]")
+    ):
         return True
     recovery = output_dir / "recovery"
     return (recovery / "latest.json").exists() or any(
@@ -512,14 +526,20 @@ def _has_training_artifacts(output_dir: Path) -> bool:
     )
 
 
-def _validate_runtime_state(state: RuntimeState, groups_per_epoch: int) -> None:
+def _validate_runtime_state(
+    state: RuntimeState,
+    groups_per_epoch: int,
+    *,
+    epochs: int,
+    accumulation_groups: int,
+) -> None:
     if state.rollout_chunk != state.loss_chunk:
         raise RuntimeError("Recovery cursor violates the unified on-policy chunk rule.")
-    if state.epoch_index not in (1, 2, 3):
+    if state.epoch_index not in range(1, epochs + 2):
         raise RuntimeError(f"Invalid recovery epoch: {state.epoch_index}.")
-    if state.epoch_index == 3:
-        expected_groups = groups_per_epoch * 2
-        expected_steps = TOTAL_OPTIMIZER_STEPS
+    if state.epoch_index == epochs + 1:
+        expected_groups = groups_per_epoch * epochs
+        expected_steps = math.ceil(groups_per_epoch / accumulation_groups) * epochs
         if state.next_group_offset != 0:
             raise RuntimeError("Completed recovery cursor must have offset zero.")
     else:
@@ -527,7 +547,9 @@ def _validate_runtime_state(state: RuntimeState, groups_per_epoch: int) -> None:
             raise RuntimeError("Recovery group offset is outside one epoch.")
         completed_epochs = state.epoch_index - 1
         expected_groups = completed_epochs * groups_per_epoch + state.next_group_offset
-        expected_steps = completed_epochs * 798 + (state.next_group_offset + 7) // 8
+        expected_steps = completed_epochs * math.ceil(
+            groups_per_epoch / accumulation_groups
+        ) + math.ceil(state.next_group_offset / accumulation_groups)
     if state.groups_completed != expected_groups or state.global_step != expected_steps:
         raise RuntimeError(
             "Recovery cursor counts are inconsistent: "
@@ -617,7 +639,7 @@ def run_training(
             f"Expected {config['data']['groups']} groups, got {len(groups)}."
         )
     trie = SidPrefixTrie.load(
-        trie_dir, expected_leaf_count=EXPECTED_BASELINE_UNIQUE_SIDS
+        trie_dir, expected_leaf_count=expected_trie_leaf_count(config)
     )
     recovery_root = output_dir / "recovery"
     contract_signature = runtime_signature(config, groups_path, trie_dir)
@@ -636,12 +658,22 @@ def run_training(
     else:
         training_state = None
         state = RuntimeState(1, 0, 0, 0, rollout_chunk, loss_chunk)
-    _validate_runtime_state(state, len(groups))
+    epochs = int(config["train"]["epochs"])
+    accumulation = int(config["train"]["gradient_accumulation_groups"])
+    _validate_runtime_state(
+        state,
+        len(groups),
+        epochs=epochs,
+        accumulation_groups=accumulation,
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     _reconcile_resume_outputs(
-        output_dir, groups, state, has_recovery=recovery is not None
+        output_dir,
+        groups,
+        state,
+        has_recovery=recovery is not None,
+        epochs=epochs,
     )
-    epochs = int(config["train"]["epochs"])
     if state.epoch_index > epochs:
         summary_path = output_dir / "run_summary.json"
         if summary_path.is_file():
@@ -679,8 +711,6 @@ def run_training(
     started_training = time.monotonic()
     run_groups = 0
     oom_retries: list[dict[str, Any]] = []
-    accumulation = int(config["train"]["gradient_accumulation_groups"])
-
     for epoch_index in range(state.epoch_index, epochs + 1):
         offset = state.next_group_offset if epoch_index == state.epoch_index else 0
         while offset < len(groups):

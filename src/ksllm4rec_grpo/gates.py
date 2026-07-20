@@ -13,7 +13,7 @@ import torch
 from transformers import AutoTokenizer
 
 from .constraint import RecommendationGrammar
-from .contract import EXPECTED_BASELINE_UNIQUE_SIDS
+from .contract import expected_trie_leaf_count
 from .data import iter_groups
 from .fingerprint import runtime_signature
 from .modeling import load_dual_adapter_model
@@ -77,7 +77,7 @@ def _attempt_rollout(
     try:
         bundle = load_dual_adapter_model(config, device=device)
         trie = SidPrefixTrie.load(
-            trie_dir, expected_leaf_count=EXPECTED_BASELINE_UNIQUE_SIDS
+            trie_dir, expected_leaf_count=expected_trie_leaf_count(config)
         )
         grammar = RecommendationGrammar(bundle.tokenizer, trie)
         with bundle.use_policy():
@@ -133,7 +133,7 @@ def _attempt_loss(
     try:
         bundle = load_dual_adapter_model(config, device=device)
         trie = SidPrefixTrie.load(
-            trie_dir, expected_leaf_count=EXPECTED_BASELINE_UNIQUE_SIDS
+            trie_dir, expected_leaf_count=expected_trie_leaf_count(config)
         )
         grammar = RecommendationGrammar(bundle.tokenizer, trie)
         optimizer, scheduler, parameters = _optimizer_and_scheduler(bundle, config)

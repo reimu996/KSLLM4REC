@@ -14,20 +14,13 @@ from .catalog import build_baseline_trie
 from .config import load_config
 from .constraint import RecommendationGrammar
 from .contract import (
-    BASE_MODEL_SHA256,
     DOMAINS,
-    EXPECTED_BASELINE_UNIQUE_SIDS,
-    EXPECTED_RECOMMEND_ROWS,
     EXPECTED_TOKEN_IDS,
-    FIXED_PROBE_SHA256,
-    GROUPS_SHA256,
-    SFT_ADAPTER_SHA256,
-    SFT_CONFIG_SHA256,
-    SOURCE_DATA_SHA256,
-    TRIE_MANIFEST_SHA256,
+    expected_trie_leaf_count,
+    profile_for_config,
 )
 from .data import build_recommendation_groups, iter_groups, write_groups
-from .integrity import require_file, sha256_file
+from .integrity import sha256_file
 from .prompt import encode_prompt
 from .trie import SidPrefixTrie
 
@@ -47,32 +40,95 @@ def _write_json(path: Path, value: Any) -> None:
     )
 
 
+def _record(path: Path, expected_sha256: str | None = None) -> dict[str, Any]:
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    actual = sha256_file(path)
+    if expected_sha256 is not None and actual != expected_sha256:
+        raise RuntimeError(
+            f"Input SHA256 mismatch for {path}: expected={expected_sha256}, "
+            f"actual={actual}"
+        )
+    return {
+        "path": str(path.resolve()),
+        "size": path.stat().st_size,
+        "sha256": actual,
+    }
+
+
+def _optional_record(
+    path: Path | None, expected_sha256: str | None = None
+) -> dict[str, Any]:
+    if path is None or not path.is_file():
+        return {"path": str(path) if path is not None else None, "present": False}
+    record = _record(path, expected_sha256)
+    record["present"] = True
+    return record
+
+
 def config_check(args: argparse.Namespace) -> dict[str, Any]:
     config = load_config(args.config)
+    profile = profile_for_config(config)
     base = Path(config["model"]["base_model"])
     adapter = Path(config["model"]["sft_adapter"])
     source = Path(config["data"]["source"])
+    provenance_value = config["data"].get("provenance")
+    provenance = Path(provenance_value) if provenance_value else profile.provenance
     probe = Path(config["evaluation"]["fixed_probe"])
+    inputs = {
+        "base_weights": _record(
+            base / "model.safetensors",
+            "28e66d2ec528473d335ede2b3faa08eddc53eb8ec93747a449e5e7ec812ede90",
+        ),
+        "sft_adapter": _record(
+            adapter / "adapter_model.safetensors", profile.adapter_sha256
+        ),
+        "sft_adapter_config": _record(
+            adapter / "adapter_config.json", profile.adapter_config_sha256
+        ),
+        "source": _record(source, profile.source_sha256),
+    }
+    if profile.provenance is None:
+        # Preserve the exact historical V3.1 report schema.
+        inputs["fixed_probe"] = _record(probe, profile.fixed_probe_sha256)
+        return {"spec_version": config["spec_version"], "inputs": inputs}
+    inputs["provenance"] = _optional_record(provenance, profile.provenance_sha256)
+    inputs["fixed_probe"] = _optional_record(probe, profile.fixed_probe_sha256)
     return {
         "spec_version": config["spec_version"],
-        "inputs": {
-            "base_weights": require_file(base / "model.safetensors", BASE_MODEL_SHA256),
-            "sft_adapter": require_file(
-                adapter / "adapter_model.safetensors", SFT_ADAPTER_SHA256
-            ),
-            "sft_adapter_config": require_file(
-                adapter / "adapter_config.json", SFT_CONFIG_SHA256
-            ),
-            "source": require_file(source, SOURCE_DATA_SHA256),
-            "fixed_probe": require_file(probe, FIXED_PROBE_SHA256),
-        },
+        "profile": profile.name,
+        "inputs": inputs,
     }
 
 
 def prepare_data(args: argparse.Namespace) -> dict[str, Any]:
     config = load_config(args.config)
+    profile = profile_for_config(config)
     source = Path(config["data"]["source"])
-    source_record = require_file(source, SOURCE_DATA_SHA256)
+    source_record = _record(source, profile.source_sha256)
+    if profile.provenance is not None:
+        provenance = Path(config["data"].get("provenance", profile.provenance))
+        _record(provenance, profile.provenance_sha256)
+        from .frontier_data import build_frontier_groups
+
+        if args.output_dir.exists():
+            manifest_path = args.output_dir / "data_manifest.json"
+            groups_path = args.output_dir / "groups.jsonl"
+            if not manifest_path.is_file() or not groups_path.is_file():
+                raise RuntimeError(
+                    f"Existing data directory is incomplete: {args.output_dir}"
+                )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if (
+                manifest.get("source_lock", {}).get("source", {}).get("sha256")
+                != source_record["sha256"]
+                or manifest.get("groups", {}).get("rows") != profile.groups
+                or sha256_file(groups_path)
+                != manifest.get("groups", {}).get("sha256")
+            ):
+                raise RuntimeError("Existing Frontier grouped data failed manifest check.")
+            return manifest
+        return build_frontier_groups(source, provenance, args.output_dir)
     if args.output_dir.exists():
         manifest_path = args.output_dir / "data_manifest.json"
         groups_path = args.output_dir / "groups.jsonl"
@@ -84,8 +140,11 @@ def prepare_data(args: argparse.Namespace) -> dict[str, Any]:
         expected = manifest.get("groups", {})
         if (
             expected.get("rows") != int(config["data"]["groups"])
-            or expected.get("sha256") != GROUPS_SHA256
-            or sha256_file(groups_path) != GROUPS_SHA256
+            or expected.get("sha256") != profile.groups_sha256
+            or (
+                profile.groups_sha256 is not None
+                and sha256_file(groups_path) != profile.groups_sha256
+            )
             or manifest.get("source") != source_record
         ):
             raise RuntimeError(
@@ -94,7 +153,7 @@ def prepare_data(args: argparse.Namespace) -> dict[str, Any]:
         return manifest
     groups = build_recommendation_groups(source)
     group_record = write_groups(groups, args.output_dir / "groups.jsonl")
-    if group_record["sha256"] != GROUPS_SHA256:
+    if profile.groups_sha256 is not None and group_record["sha256"] != profile.groups_sha256:
         raise RuntimeError("Rebuilt grouped data differs from the frozen artifact.")
     manifest = {
         "schema_version": 3,
@@ -111,7 +170,7 @@ def prepare_data(args: argparse.Namespace) -> dict[str, Any]:
         ),
         "completion_fields": [],
     }
-    if manifest["positive_rows"] != EXPECTED_RECOMMEND_ROWS:
+    if manifest["positive_rows"] != profile.positives:
         raise RuntimeError("Prepared group positives differ from the frozen contract.")
     _write_json(args.output_dir / "data_manifest.json", manifest)
     return manifest
@@ -119,28 +178,52 @@ def prepare_data(args: argparse.Namespace) -> dict[str, Any]:
 
 def build_trie(args: argparse.Namespace) -> dict[str, Any]:
     config = load_config(args.config)
+    profile = profile_for_config(config)
     source = Path(config["data"]["source"])
-    require_file(source, SOURCE_DATA_SHA256)
+    _record(source, profile.source_sha256)
+    if profile.provenance is not None:
+        provenance = Path(config["data"].get("provenance", profile.provenance))
+        _record(provenance, profile.provenance_sha256)
+        from .frontier_data import build_frontier_trie
+
+        if args.output_dir.exists():
+            manifest_path = args.output_dir / "manifest.json"
+            if not manifest_path.is_file():
+                raise RuntimeError(
+                    f"Existing trie directory is incomplete: {args.output_dir}"
+                )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if (
+                manifest.get("counts", {}).get("leaves") != profile.unique_sids
+                or (
+                    profile.trie_manifest_sha256 is not None
+                    and sha256_file(manifest_path) != profile.trie_manifest_sha256
+                )
+            ):
+                raise RuntimeError("Existing Frontier trie failed its manifest check.")
+            return manifest
+        return build_frontier_trie(source, provenance, args.output_dir)
     if args.output_dir.exists():
         trie = SidPrefixTrie.load(
-            args.output_dir, expected_leaf_count=EXPECTED_BASELINE_UNIQUE_SIDS
+            args.output_dir, expected_leaf_count=expected_trie_leaf_count(config)
         )
         manifest = json.loads(
             (args.output_dir / "manifest.json").read_text(encoding="utf-8")
         )
         metadata = manifest.get("metadata", {})
         if (
-            metadata.get("source_sha256") != SOURCE_DATA_SHA256
+            metadata.get("source_sha256") != profile.source_sha256
             or metadata.get("strategy") != "baseline_all_system_prompt_response_sids"
             or manifest.get("counts") != trie.counts
-            or sha256_file(args.output_dir / "manifest.json") != TRIE_MANIFEST_SHA256
+            or sha256_file(args.output_dir / "manifest.json")
+            != profile.trie_manifest_sha256
         ):
             raise RuntimeError("Existing trie failed its frozen manifest check.")
         return manifest
     manifest = build_baseline_trie(source, args.output_dir)
-    if manifest["counts"]["leaves"] != EXPECTED_BASELINE_UNIQUE_SIDS:
+    if manifest["counts"]["leaves"] != profile.unique_sids:
         raise RuntimeError("Saved trie has an unexpected leaf count.")
-    if sha256_file(args.output_dir / "manifest.json") != TRIE_MANIFEST_SHA256:
+    if sha256_file(args.output_dir / "manifest.json") != profile.trie_manifest_sha256:
         raise RuntimeError("Rebuilt trie differs from the frozen artifact.")
     return manifest
 
@@ -155,7 +238,7 @@ def test_tokenizer(args: argparse.Namespace) -> dict[str, Any]:
         trust_remote_code=True,
     )
     trie = SidPrefixTrie.load(
-        args.trie_dir, expected_leaf_count=EXPECTED_BASELINE_UNIQUE_SIDS
+        args.trie_dir, expected_leaf_count=expected_trie_leaf_count(config)
     )
     grammar = RecommendationGrammar(tokenizer, trie)
     actual_token_ids = {

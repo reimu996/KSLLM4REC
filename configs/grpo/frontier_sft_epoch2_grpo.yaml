@@ -1,0 +1,95 @@
+schema_version: 4
+spec_version: "2.0"
+profile: frontier_sft_epoch2_v2
+
+model:
+  base_model: /home/lyc/models/OneReason-0.8B-pretrain-competition
+  sft_adapter: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/platform_exports/frontier_feedbackcore_listwise_invariant_epoch2_20260719/extracted
+  tokenizer: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/platform_exports/frontier_feedbackcore_listwise_invariant_epoch2_20260719/extracted
+  policy_adapter: default
+  reference_adapter: reference
+  attention: flash_attention_2
+  dtype: bfloat16
+  disable_dropout: true
+
+data:
+  source: /home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/train.jsonl
+  provenance: /home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/provenance.jsonl
+  task: recommend
+  groups: 17016
+  positives: 30465
+  cutoff_len: 16384
+
+trie:
+  strategy: frontier_all_system_prompt_response_sids
+  unique_sids: 905469
+  domain_a_nodes: 10744
+  domain_ab_nodes: 429540
+
+rollout:
+  num_generations: 8
+  max_completion_length: 32
+  do_sample: true
+  num_beams: 1
+  temperature: 1.0
+  top_k: 0
+  top_p: 1.0
+  retain_duplicates: true
+  replay_buffer: false
+  num_iterations: 1
+  add_gt_probability: 0.50
+  add_gt_replaces_index: 7
+
+reward:
+  exact: 1.0
+  same_ab: 0.20
+  same_a: 0.05
+  same_domain: 0.01
+  normalization: zscore
+  std_correction: 1
+  std_epsilon: 1.0e-4
+
+loss:
+  clip_epsilon: 0.2
+  reference_beta: 0.02
+
+train:
+  epochs: 2
+  prompt_microbatch_size: 1
+  gradient_accumulation_groups: 8
+  learning_rate: 5.0e-6
+  weight_decay: 0.0
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_epsilon: 1.0e-8
+  max_grad_norm: 1.0
+  scheduler: cosine
+  warmup_ratio: 0.03
+  gradient_checkpointing: true
+  bf16: true
+  tf32: true
+  seed: 42
+  logging_steps: 10
+  resume_save_steps: 100
+
+memory:
+  chunk_candidates: [8, 4, 2, 1]
+  max_reserved_gib: 20.0
+  min_free_gib: 20.5
+
+gates:
+  signal_groups: 512
+  timing_groups: 32
+  max_projected_hours: 72.0
+
+evaluation:
+  fixed_probe: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/data/frontier_probe_v1/fixed_probe_1024.jsonl
+  num_beams: 16
+  do_sample: false
+  max_completion_length: 32
+
+output:
+  groups_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/data/recommend_groups_frontier_v1
+  trie_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/catalog/frontier_all_system_prompt_response_sids_v1
+  run_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/runs/frontier_sft_epoch2_grpo_g8_forcedgt_p050_zscore_2epoch
+  log_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/operation_logs/grpo/frontier_sft_epoch2_v2
