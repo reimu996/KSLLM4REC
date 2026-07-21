@@ -1,0 +1,100 @@
+schema_version: 1
+spec_version: '2.0'
+profile: frontier_sft_epoch2_lora64_ref_free_g16_rloo_anchor
+model:
+  base_model: /home/lyc/models/OneReason-0.8B-pretrain-competition
+  sft_adapter: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/platform_exports/frontier_feedbackcore_listwise_invariant_epoch2_lora64_20260722/extracted
+  tokenizer: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/platform_exports/frontier_feedbackcore_listwise_invariant_epoch2_lora64_20260722/extracted
+  policy_adapter: default
+  attention: flash_attention_2
+  dtype: bfloat16
+  disable_dropout: true
+  lora_rank: 64
+  lora_alpha: 64
+  lora_dropout: 0.0
+data:
+  source: /home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/train.jsonl
+  provenance: /home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/provenance.jsonl
+  task: recommend
+  groups: 17016
+  positives: 30465
+  cutoff_len: 16384
+  prompt_mode: direct_no_think
+trie:
+  strategy: frontier_all_system_prompt_response_sids
+  unique_sids: 905469
+  domain_a_nodes: 10744
+  domain_ab_nodes: 429540
+rollout:
+  num_generations: 16
+  candidate_chunk_size: 8
+  max_completion_length: 32
+  do_sample: true
+  num_beams: 1
+  temperature: 1.0
+  top_k: 0
+  top_p: 1.0
+  retain_duplicates: true
+  replay_buffer: false
+  num_iterations: 1
+reward:
+  exact: 1.0
+  same_ab: 0.4
+  same_a: 0.15
+  same_domain: 0.01
+  other_domain: 0.0
+  advantage: rloo
+  divide_by_std: false
+loss:
+  objective: rloo_with_conditional_gt_set_anchor
+  reference_free: true
+  decision_tokens_only: true
+anchor:
+  trigger: equal_rewards_non_exact
+  target: all_unique_gt
+  calibration_groups: 512
+  target_gradient_ratio: 0.1
+  max_weight: 0.05
+  min_grad_norm: 1.0e-12
+train:
+  epochs: 2
+  prompt_microbatch_size: 1
+  gradient_accumulation_groups: 8
+  windows_per_epoch: 2127
+  total_windows: 4254
+  learning_rate: 5.0e-06
+  weight_decay: 0.0
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_epsilon: 1.0e-08
+  max_grad_norm: 1.0
+  scheduler: cosine
+  warmup_windows: 128
+  gradient_checkpointing: true
+  bf16: true
+  tf32: true
+  seed: 42
+  logging_windows: 10
+  resume_save_updates: 100
+  shuffle: false
+memory:
+  loss_chunk_size: 8
+  gt_chunk_size: 8
+  max_reserved_gib: 20.0
+gates:
+  signal_groups: 512
+  timing_groups: 256
+  max_projected_hours: 72.0
+  min_rloo_group_rate: 0.25
+  max_logp_difference: 1.0e-05
+evaluation:
+  fixed_probe: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/data/frontier_probe_v1/fixed_probe_1024.jsonl
+  num_beams: 16
+  do_sample: false
+  max_completion_length: 32
+output:
+  groups_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/data/recommend_groups_frontier_v1
+  trie_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/catalog/frontier_all_system_prompt_response_sids_v1
+  run_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/rloo/runs/frontier_sft_epoch2_lora64_ref_free_g16_rloo_anchor_2epoch
+  log_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/operation_logs/rloo/frontier_sft_epoch2_lora64_g16_v1
+  calibration_ids: /home/lyc/REC_PROJECTS/KSLLM4REC/configs/rloo/frontier_sft_epoch2_lora64_calibration_ids.json
