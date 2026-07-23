@@ -10,7 +10,7 @@ import torch
 
 from ksllm4rec_orpo.data import Sid
 
-from .probability import sample_legal_action
+from .probability import sample_legal_action, sample_legal_action_with_stats
 from .scoring import _forward_hidden, legal_logits_from_hidden, unwrap_causal_lm
 
 
@@ -27,6 +27,8 @@ class RolloutCandidate:
     token_ids: tuple[int, ...]
     old_log_probs: tuple[float, ...]
     decision_mask: tuple[bool, ...]
+    legal_entropies: tuple[float, ...] = ()
+    legal_action_counts: tuple[int, ...] = ()
 
     @property
     def completion_ids(self) -> tuple[int, ...]:
@@ -100,6 +102,7 @@ def _sample_chunk(
     max_completion_length: int,
     device: torch.device,
     temperature: float = 1.0,
+    collect_legal_stats: bool = False,
 ) -> list[RolloutCandidate]:
     """Sample one chunk while retaining the exact per-token old log-probs."""
 
@@ -124,6 +127,8 @@ def _sample_chunk(
     tokens: dict[int, list[int]] = {index: [] for index in indices}
     logps: dict[int, list[float]] = {index: [] for index in indices}
     decisions: dict[int, list[bool]] = {index: [] for index in indices}
+    entropies: dict[int, list[float]] = {index: [] for index in indices}
+    action_counts: dict[int, list[int]] = {index: [] for index in indices}
     finished = {index: False for index in indices}
     eos_id = int(grammar.eos_token_id)
 
@@ -153,6 +158,9 @@ def _sample_chunk(
                 tokens[index].append(token_id)
                 logps[index].append(0.0)
                 decisions[index].append(False)
+                if collect_legal_stats:
+                    entropies[index].append(0.0)
+                    action_counts[index].append(1)
                 finished[index] = token_id == eos_id
         if not active:
             break
@@ -188,16 +196,29 @@ def _sample_chunk(
             )
             # Use local IDs because legal_logits is already projected in the
             # exact order returned by grammar.allowed_next().
-            local_token, log_prob, decision = sample_legal_action(
-                legal_logits,
-                list(range(len(allowed))),
-                generator=generators[index],
-                temperature=temperature,
-            )
+            if collect_legal_stats:
+                local_token, log_prob, decision, entropy, action_count = (
+                    sample_legal_action_with_stats(
+                        legal_logits,
+                        list(range(len(allowed))),
+                        generator=generators[index],
+                        temperature=temperature,
+                    )
+                )
+            else:
+                local_token, log_prob, decision = sample_legal_action(
+                    legal_logits,
+                    list(range(len(allowed))),
+                    generator=generators[index],
+                    temperature=temperature,
+                )
             token_id = int(allowed[local_token])
             generated.append(token_id)
             logps[index].append(float(log_prob.detach().float().item()))
             decisions[index].append(bool(decision))
+            if collect_legal_stats:
+                entropies[index].append(float(entropy.detach().float().item()))
+                action_counts[index].append(int(action_count))
             finished[index] = token_id == eos_id
     if not all(finished.values()):  # pragma: no cover - guarded by loop
         raise RuntimeError("Constrained rollout ended before all rows emitted EOS.")
@@ -215,6 +236,8 @@ def _sample_chunk(
                 token_ids=tuple(row_tokens),
                 old_log_probs=tuple(logps[index]),
                 decision_mask=tuple(decisions[index]),
+                legal_entropies=tuple(entropies[index]),
+                legal_action_counts=tuple(action_counts[index]),
             )
         )
     return result
@@ -232,6 +255,7 @@ def rollout_group(
     max_completion_length: int = 32,
     device: torch.device | str | None = None,
     temperature: float = 1.0,
+    collect_legal_stats: bool = False,
 ) -> tuple[RolloutCandidate, ...]:
     """Generate exactly candidates 0..15 using fixed chunks 0..7 and 8..15."""
 
@@ -260,6 +284,7 @@ def rollout_group(
                 max_completion_length=max_completion_length,
                 device=torch_device,
                 temperature=temperature,
+                collect_legal_stats=collect_legal_stats,
             )
         )
     candidates.sort(key=lambda candidate: candidate.candidate_index)
@@ -290,6 +315,16 @@ def pad_rollout_candidates(
         raise ValueError("token_ids and old_log_probs lengths must match.")
     if any(len(row.token_ids) != len(row.decision_mask) for row in rows):
         raise ValueError("token_ids and decision_mask lengths must match.")
+    if any(
+        row.legal_entropies and len(row.token_ids) != len(row.legal_entropies)
+        for row in rows
+    ):
+        raise ValueError("token_ids and legal_entropies lengths must match.")
+    if any(
+        row.legal_action_counts and len(row.token_ids) != len(row.legal_action_counts)
+        for row in rows
+    ):
+        raise ValueError("token_ids and legal_action_counts lengths must match.")
     maximum = max(len(row.token_ids) for row in rows)
     target_device = torch.device(device) if device is not None else torch.device("cpu")
     token_tensor = torch.full(

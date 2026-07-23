@@ -7,6 +7,7 @@ from ksllm4rec_rloo.probability import (
     legal_log_probs,
     legal_token_log_prob,
     sample_legal_action,
+    sample_legal_action_with_stats,
     sample_legal_token,
 )
 
@@ -44,6 +45,40 @@ class LegalPrefixProbabilityTest(unittest.TestCase):
         )
         rescored = legal_token_log_prob(logits, [1, 3], token)
         torch.testing.assert_close(sampled_logp, rescored)
+
+    def test_temperature_stats_use_the_sampling_distribution(self) -> None:
+        logits = torch.tensor([4.0, 2.0, 0.0])
+        generator = torch.Generator().manual_seed(7)
+        _, _, decision, entropy, count = sample_legal_action_with_stats(
+            logits, [0, 1, 2], generator=generator, temperature=1.2
+        )
+        expected_logps = torch.log_softmax(logits / 1.2, dim=0)
+        expected_entropy = -(expected_logps.exp() * expected_logps).sum()
+        self.assertTrue(decision)
+        self.assertEqual(count, 3)
+        torch.testing.assert_close(entropy, expected_entropy)
+
+        logps_t1 = torch.log_softmax(logits, dim=0)
+        entropy_t1 = -(logps_t1.exp() * logps_t1).sum()
+        self.assertGreater(float(entropy), float(entropy_t1))
+
+    def test_stats_entropy_handles_zero_probability_legal_action(self) -> None:
+        logits = torch.tensor([0.0, -torch.inf])
+        _, _, _, entropy, count = sample_legal_action_with_stats(logits, [0, 1])
+        self.assertEqual(count, 2)
+        self.assertTrue(torch.isfinite(entropy))
+        self.assertEqual(float(entropy), 0.0)
+
+    def test_stats_singleton_does_not_consume_generator(self) -> None:
+        generator = torch.Generator().manual_seed(29)
+        before = generator.get_state().clone()
+        _, _, decision, entropy, count = sample_legal_action_with_stats(
+            torch.tensor([1.0, 2.0]), [1], generator=generator, temperature=1.2
+        )
+        self.assertFalse(decision)
+        self.assertEqual(count, 1)
+        self.assertEqual(float(entropy), 0.0)
+        self.assertTrue(torch.equal(before, generator.get_state()))
 
     def test_seed_payload_is_independent_of_candidate_order(self) -> None:
         payload = b"rollout|42|0|group-x|15"

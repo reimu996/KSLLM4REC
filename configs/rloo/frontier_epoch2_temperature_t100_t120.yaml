@@ -1,0 +1,55 @@
+schema_version: 1
+experiment_id: frontier_epoch2_temperature_t100_t120_v1
+purpose: inference_only_temperature_ab
+
+formal_rloo_config: /home/lyc/REC_PROJECTS/KSLLM4REC/configs/rloo/frontier_sft_epoch2_lora64_g16.yaml
+policy_adapter: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/rloo/runs/frontier_sft_epoch2_lora64_ref_free_g16_rloo_anchor_2epoch/epoch_002
+groups: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/data/recommend_groups_frontier_v1/groups.jsonl
+calibration_ids: /home/lyc/REC_PROJECTS/KSLLM4REC/configs/rloo/frontier_sft_epoch2_lora64_calibration_ids.json
+trie: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/catalog/frontier_all_system_prompt_response_sids_v1
+output_root: /home/lyc/REC_PROJECTS/KSLLM4REC/operation_logs/rloo/frontier_epoch2_temperature_t100_t120_v1
+
+sha256:
+  formal_rloo_config: 1cdcaf0bbfe163a82a2d321b03a1fd81d88096ffd6a40859a19a30fd977358cf
+  adapter_model: aeebde52b58efd3685a2925de9b66163d40a91e62467fac7e233b68e11c8fdb2
+  adapter_config: 32e96266efa21abaebd076e9287ca108c3a5abab0c4be3aa1e13fe3427bb109e
+  groups: a2571d97e4ac231d61d1f468bc23b8e65bebfd5ad7b1a2dd566f1bfd86a9658e
+  calibration_ids: 2dccbfc3e5298b416168b0af3d2bed5c5ae63beb415af9201b4b03d3966b94d6
+  calibration_group_ids: 53af7f0ac42a8ee0914e2ea8e4a2eac15fe63c432be007e808ab7351ea098189
+  trie_manifest: f51414b13a8982605ebe1f7fec75929245db60c854e3860d3b6c1625a3f33e4a
+
+sampling:
+  temperatures: [1.0, 1.2]
+  groups: 512
+  generations: 16
+  chunk_size: 8
+  max_completion_length: 32
+  seed: 42
+  epoch_index: 3
+  top_k: 0
+  top_p: 1.0
+  retain_duplicates: true
+
+reward:
+  exact: 1.0
+  same_ab: 0.40
+  same_a: 0.15
+  same_domain: 0.01
+  other_domain: 0.0
+
+safety:
+  inference_only: true
+  max_logp_difference: 1.0e-5
+  max_reserved_gib: 20.0
+  require_all_legal: true
+  require_all_finite: true
+  forbid_gt_injection: true
+  forbid_reward_conditioned_resampling: true
+
+decision:
+  min_informative_group_rate_delta: 0.05
+  min_mean_unique_sid_delta: 0.5
+  max_uniform_same_domain_rate_delta: -0.05
+  min_any_exact_group_rate_delta: 0.0
+  min_average_group_max_reward_delta: 0.0
+  max_other_domain_slot_rate_delta: 0.02

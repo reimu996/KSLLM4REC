@@ -43,9 +43,10 @@ def _fake_chunk(
     max_completion_length,
     device,
     temperature=1.0,
+    collect_legal_stats=False,
 ):
     del model, prompt_ids, grammar, group_id, epoch_index, max_completion_length
-    del device, temperature
+    del device, temperature, collect_legal_stats
     return [
         RolloutCandidate(
             candidate_index=index,
@@ -53,6 +54,8 @@ def _fake_chunk(
             token_ids=(10, 99),
             old_log_probs=(0.0, 0.0),
             decision_mask=(True, False),
+            legal_entropies=(0.5, 0.0),
+            legal_action_counts=(2, 1),
         )
         for index in candidate_indices
     ]
@@ -109,6 +112,8 @@ class G16RolloutTest(unittest.TestCase):
                 token_ids=(i + 1,) * (2 if i % 2 else 3),
                 old_log_probs=(-0.5,) * (2 if i % 2 else 3),
                 decision_mask=(True,) + (False,) * ((2 if i % 2 else 3) - 1),
+                legal_entropies=(0.5,) + (0.0,) * ((2 if i % 2 else 3) - 1),
+                legal_action_counts=(2,) + (1,) * ((2 if i % 2 else 3) - 1),
             )
             for i in range(16)
         )

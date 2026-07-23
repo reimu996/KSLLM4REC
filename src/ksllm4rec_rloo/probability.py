@@ -170,6 +170,36 @@ def sample_legal_action(
     return token_id, log_prob, decision
 
 
+def sample_legal_action_with_stats(
+    logits: torch.Tensor,
+    allowed_ids: Sequence[int] | torch.Tensor,
+    *,
+    generator: torch.Generator | None = None,
+    temperature: float = 1.0,
+) -> tuple[int, torch.Tensor, bool, torch.Tensor, int]:
+    """Sample one legal action and also return exact entropy and action count.
+
+    The entropy is computed from the same FP32 legal-only distribution used
+    for sampling. Singleton grammar nodes return entropy zero without reading
+    logits or consuming RNG state.
+    """
+
+    _validate_logits(logits)
+    ids = _as_unique_ids(allowed_ids)
+    count = len(ids)
+    if count == 1:
+        zero = torch.zeros((), dtype=torch.float32, device=logits.device)
+        return ids[0], zero, False, zero, count
+    log_probs = legal_log_probs(logits, ids, temperature=temperature)
+    kwargs: dict[str, Any] = {}
+    if generator is not None:
+        kwargs["generator"] = generator
+    position = int(torch.multinomial(log_probs.exp(), 1, **kwargs).item())
+    probabilities = log_probs.exp()
+    entropy = torch.special.entr(probabilities).sum()
+    return ids[position], log_probs[position], True, entropy, count
+
+
 # Explicit aliases make the shared primitive easy to discover in call sites
 # and keep compatibility with the historical GRPO naming.
 legal_token_log_probability = legal_token_log_prob
@@ -182,6 +212,7 @@ __all__ = [
     "legal_token_log_prob",
     "legal_token_log_probability",
     "sample_legal_action",
+    "sample_legal_action_with_stats",
     "sample_legal_action_token",
     "sample_legal_token",
 ]
