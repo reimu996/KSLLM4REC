@@ -96,3 +96,9 @@ scripts/rloo/frontier_temperature_ab/run_all.sh
 - `runtime.log`
 
 仓库只提交配置、实现、脚本、测试和最终 Markdown 摘要，不提交大体积逐候选原始日志。
+
+## 实际执行结果
+
+两臂各 512 组、8,192 个候选的正式诊断和最终 verifier 已完成。预先声明的结论为 `not_promising`：`T=1.2` 将 informative RLOO 组率从 15.4297% 提高到 18.9453%，但 `+3.5156` 个百分点未达到 `+5` 门槛；全组 `same_domain` 比例只下降 `1.3672` 个百分点，也未达到下降 `5` 个百分点门槛。
+
+`T=1.2` 将每组平均唯一 SID 从 12.1035 提高到 13.4023、重复槽位率从 24.3530% 降到 16.2354%，但 exact 槽位从 45 降到 38，平均候选 reward 从 0.034204 降到 0.032200。完整计数、配对转移、SHA 和复现证据见 [`FRONTIER_RLOO_TEMPERATURE_AB_SUMMARY_20260724.md`](../operation_logs/FRONTIER_RLOO_TEMPERATURE_AB_SUMMARY_20260724.md)。

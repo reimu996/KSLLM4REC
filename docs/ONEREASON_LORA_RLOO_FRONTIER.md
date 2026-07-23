@@ -131,3 +131,4 @@ scripts/rloo/frontier_lora64_g16/verify.sh
 - 固定 probe 的 recommendation exact 为 `2 -> 0 -> 1 / 512`，text-to-SID exact 为 `78 -> 79 -> 79 / 512`；本地 probe 没有证明 recommendation 性能超过训练起点。
 - 最终 verifier 按已实现合同返回 `passed=true`；本结论只证明产物完整、可复算和满足工程约束，不代表官方比赛提分。
 - Epoch 1/2 adapter 后续已分别发布到公开 HF 仓库；远端 revision 和匿名下载哈希见上传结果文档。
+- 最终 Epoch 2 policy 的 `T=1.0` 对 `T=1.2` 固定 512 组在线采样诊断已完成；预先声明的判定为 `not_promising`。详见 [`FRONTIER_RLOO_TEMPERATURE_AB_SUMMARY_20260724.md`](../operation_logs/FRONTIER_RLOO_TEMPERATURE_AB_SUMMARY_20260724.md)。
