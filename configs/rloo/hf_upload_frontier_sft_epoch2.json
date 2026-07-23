@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "profile": "frontier_sft_epoch2_r64_reference_free_rloo_g16",
+  "namespace": "reimu996",
+  "visibility": "public",
+  "artifact_root": "artifacts/rloo/hf_upload_frontier_sft_epoch2",
+  "log_root": "operation_logs/rloo/frontier_sft_epoch2_hf_upload",
+  "required_uploaded_files": [
+    "README.md",
+    "adapter_config.json",
+    "adapter_model.safetensors"
+  ],
+  "allowed_hub_managed_files": [
+    ".gitattributes"
+  ],
+  "required_remote_files": [
+    ".gitattributes",
+    "README.md",
+    "adapter_config.json",
+    "adapter_model.safetensors"
+  ],
+  "commit_message": "Upload OneReason-0.8B Frontier SFT Epoch2 RLOO LoRA adapter",
+  "training": {
+    "title": "OneReason-0.8B Frontier SFT Epoch 2 -> Reference-Free RLOO LoRA",
+    "base_description": "OneReason-0.8B competition base with the Frontier SFT Epoch 2 r64 adapter",
+    "method": "online reference-free RLOO",
+    "method_details": "G=16 live legal-SID sampling, five-tier SID reward, leave-one-out advantages without standard-deviation normalization, conditional GT-set anchor, no reference model, no KL, no GT injection, two epochs",
+    "data_label": "Frontier RLOO groups",
+    "data_value": "17,016 normalized groups x 2 epochs",
+    "lora_rank": 64,
+    "lora_alpha": 64,
+    "lora_dropout": 0.0,
+    "target_modules": [
+      "q_proj",
+      "k_proj",
+      "v_proj",
+      "o_proj",
+      "gate_proj",
+      "up_proj",
+      "down_proj"
+    ],
+    "evaluation_status": "Only a local Frontier-derived constrained beam-16 probe was run; no official competition score or performance improvement is claimed."
+  },
+  "provenance": {
+    "rloo_run_dir": "artifacts/rloo/runs/frontier_sft_epoch2_lora64_ref_free_g16_rloo_anchor_2epoch",
+    "source_dataset": "/home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1",
+    "recommendation_groups": 17016,
+    "deduplicated_positive_edges": 30465,
+    "legal_sid_leaves": 905469,
+    "runtime_signature": "315c1a90a5a0c97c4fa0dd99dce50696726b408a89aaf8f919b74d0c260e0bb2"
+  },
+  "repositories": [
+    {
+      "epoch": 1,
+      "repo_id": "reimu996/OneReason-0.8B-Frontier-SFT-Epoch2-RLOO-Epoch1",
+      "source_dir": "artifacts/rloo/runs/frontier_sft_epoch2_lora64_ref_free_g16_rloo_anchor_2epoch/epoch_001",
+      "adapter_model": {
+        "size": 161533160,
+        "sha256": "796a960c1759770f19cdde632bafeac56d848f6aac64436de413933cc3c66dc2"
+      },
+      "adapter_config": {
+        "size": 1081,
+        "sha256": "32e96266efa21abaebd076e9287ca108c3a5abab0c4be3aa1e13fe3427bb109e"
+      }
+    },
+    {
+      "epoch": 2,
+      "repo_id": "reimu996/OneReason-0.8B-Frontier-SFT-Epoch2-RLOO-Epoch2",
+      "source_dir": "artifacts/rloo/runs/frontier_sft_epoch2_lora64_ref_free_g16_rloo_anchor_2epoch/epoch_002",
+      "adapter_model": {
+        "size": 161533160,
+        "sha256": "aeebde52b58efd3685a2925de9b66163d40a91e62467fac7e233b68e11c8fdb2"
+      },
+      "adapter_config": {
+        "size": 1081,
+        "sha256": "32e96266efa21abaebd076e9287ca108c3a5abab0c4be3aa1e13fe3427bb109e"
+      }
+    }
+  ]
+}

@@ -166,6 +166,6 @@ bash scripts/rloo/frontier_lora64_g16/run_trained_probes.sh
 bash scripts/rloo/frontier_lora64_g16/verify.sh
 ```
 
-两轮 adapter 目前只保存在上述本地路径。本次已确认范围不包含 Hugging Face 上传，不能把本地训练完成写成“已上传”。
+本训练阶段原确认范围不包含 Hugging Face 上传。用户后续单独授权后，两轮 adapter 已发布并完成匿名下载校验；详情见 [`HF_FRONTIER_RLOO_UPLOAD_SUMMARY_20260723.md`](HF_FRONTIER_RLOO_UPLOAD_SUMMARY_20260723.md)。上传不改变本地训练结果，也不改变“固定 recommendation probe 没有超过起点”的结论。
 
 一句话结论：本次与 Frontier GRPO 使用完全相同的数据资产，RLOO 两轮训练工程验收完成且在线 reward 上升，但固定 recommendation probe 没有超过起点。

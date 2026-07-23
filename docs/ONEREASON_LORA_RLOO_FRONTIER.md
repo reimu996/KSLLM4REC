@@ -116,6 +116,8 @@ scripts/rloo/frontier_lora64_g16/verify.sh
 - 每组审计：`train_audit.jsonl`
 - 每窗口进度：`train_progress.jsonl`
 - 门禁、probe、最终验证：`operation_logs/rloo/frontier_sft_epoch2_lora64_g16_v1/`
+- HF 上传合同：`configs/rloo/hf_upload_frontier_sft_epoch2.json`
+- HF 上传结果：`operation_logs/HF_FRONTIER_RLOO_UPLOAD_SUMMARY_20260723.md`
 
 正式验证要求 epoch 0/1/2 均完成固定 1,024 条 beam-16 合法约束 probe，并逐行复算训练 reward、RLOO branch、调度位置、恢复游标与 adapter SHA。
 
@@ -128,3 +130,4 @@ scripts/rloo/frontier_lora64_g16/verify.sh
 - Epoch 1/2 的 RLOO 分支率为 `25.36% -> 17.10%`，两轮总体为 `21.23%`。这低于开跑前抽样阈值，但该阈值不属于正式训练后的硬失败条件；不能把结果表述成“正式两轮 RLOO 率均达到 25%”。
 - 固定 probe 的 recommendation exact 为 `2 -> 0 -> 1 / 512`，text-to-SID exact 为 `78 -> 79 -> 79 / 512`；本地 probe 没有证明 recommendation 性能超过训练起点。
 - 最终 verifier 按已实现合同返回 `passed=true`；本结论只证明产物完整、可复算和满足工程约束，不代表官方比赛提分。
+- Epoch 1/2 adapter 后续已分别发布到公开 HF 仓库；远端 revision 和匿名下载哈希见上传结果文档。
