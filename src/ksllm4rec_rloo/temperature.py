@@ -814,8 +814,14 @@ def run_arm(
     torch_device = torch.device(device)
     if torch_device.type != "cuda" or not torch.cuda.is_available():
         raise RuntimeError("Temperature A/B model execution requires a CUDA device.")
+    device_index = (
+        torch.cuda.current_device()
+        if torch_device.index is None
+        else int(torch_device.index)
+    )
+    torch.cuda.set_device(device_index)
     torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats(torch_device)
+    torch.cuda.reset_peak_memory_stats(device_index)
     set_global_seed(int(config["sampling"]["seed"]))
     adapter = Path(str(config["policy_adapter"]))
     source_before = {
@@ -939,10 +945,10 @@ def run_arm(
         os.fsync(audit_handle.fileno())
     os.replace(temporary_audit, audit_path)
 
-    torch.cuda.synchronize(torch_device)
+    torch.cuda.synchronize(device_index)
     seconds = time.monotonic() - started
-    peak_allocated = torch.cuda.max_memory_allocated(torch_device) / 1024**3
-    peak_reserved = torch.cuda.max_memory_reserved(torch_device) / 1024**3
+    peak_allocated = torch.cuda.max_memory_allocated(device_index) / 1024**3
+    peak_reserved = torch.cuda.max_memory_reserved(device_index) / 1024**3
     parameters_after = parameter_fingerprint(bundle.model)
     grad_tensors = sum(
         parameter.grad is not None for parameter in bundle.model.parameters()
@@ -998,7 +1004,7 @@ def run_arm(
         },
         "runtime": {
             "device": str(torch_device),
-            "gpu_name": torch.cuda.get_device_name(torch_device),
+            "gpu_name": torch.cuda.get_device_name(device_index),
             "seconds": seconds,
             "peak_allocated_gib": peak_allocated,
             "peak_reserved_gib": peak_reserved,
