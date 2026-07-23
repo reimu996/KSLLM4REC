@@ -42,6 +42,8 @@ same_domain   0.01
 other_domain  0.00
 ```
 
+一个 SID 由 `domain + a + b + c` 四段组成，例如 `<|video_begin|><s_a_6207><s_b_5619><s_c_4704>`。每个候选与该 prompt 的所有 GT SID 比较并取最高档，优先级固定为 `exact > same_ab > same_a > same_domain > other_domain`：四段完全相同是 `exact`；domain/a/b 相同但 c 不同是 `same_ab`；domain/a 相同但没有命中前两档是 `same_a`；只有 domain 相同是 `same_domain`；domain 不同是 `other_domain`。
+
 对于候选 `i`，RLOO advantage 为：
 
 ```text
@@ -97,13 +99,13 @@ scripts/rloo/frontier_lora64_g16/verify.sh
 
 也可在实现已提交后执行 `scripts/rloo/frontier_lora64_g16/run_all.sh`。
 
-## 硬门禁
+## 开跑前硬门禁
 
-正式训练必须加载同一运行签名和同一 `lambda0` 的六份报告：结构、校准、采样/重放概率一致性、32 条最长 prompt 显存、512 组训练信号、256 组端到端耗时。
+正式训练启动前必须加载同一运行签名和同一 `lambda0` 的六份报告：结构、校准、采样/重放概率一致性、32 条最长 prompt 显存、512 组训练信号、256 组端到端耗时。这里的比例和耗时阈值约束开跑前的固定抽样，不是要求训练后的 policy 在两轮全量数据上继续保持相同比例。
 
 - sampled/replayed decision log-prob 最大绝对差：`<= 1e-5`
 - RTX 4090 peak reserved：`<= 20 GiB`
-- RLOO group rate：`>= 25%`
+- calibration、signal、timing 预跑的 RLOO group rate：`>= 25%`
 - 时间投影：`1.2 * seconds / 256 * 34032 / 3600 <= 72 h`
 - 所有候选合法，reward/loss/gradient 有限
 
@@ -116,3 +118,13 @@ scripts/rloo/frontier_lora64_g16/verify.sh
 - 门禁、probe、最终验证：`operation_logs/rloo/frontier_sft_epoch2_lora64_g16_v1/`
 
 正式验证要求 epoch 0/1/2 均完成固定 1,024 条 beam-16 合法约束 probe，并逐行复算训练 reward、RLOO branch、调度位置、恢复游标与 adapter SHA。
+
+## 实际执行结果
+
+本实验已完成两轮正式训练、epoch 0/1/2 固定 probe 和最终 verifier。完整结果、哈希与复现证据见 [`FRONTIER_RLOO_EXECUTION_SUMMARY_20260723.md`](../operation_logs/FRONTIER_RLOO_EXECUTION_SUMMARY_20260723.md)。
+
+- 两轮共处理 34,032 个 group 访问、544,512 个实时候选，未注入 GT；正式训练峰值 reserved 显存为 10.6816 GiB。
+- Epoch 1/2 的在线候选平均 reward 为 `0.02261 -> 0.03098`，exact 槽位率为 `0.2531% -> 0.6604%`。
+- Epoch 1/2 的 RLOO 分支率为 `25.36% -> 17.10%`，两轮总体为 `21.23%`。这低于开跑前抽样阈值，但该阈值不属于正式训练后的硬失败条件；不能把结果表述成“正式两轮 RLOO 率均达到 25%”。
+- 固定 probe 的 recommendation exact 为 `2 -> 0 -> 1 / 512`，text-to-SID exact 为 `78 -> 79 -> 79 / 512`；本地 probe 没有证明 recommendation 性能超过训练起点。
+- 最终 verifier 按已实现合同返回 `passed=true`；本结论只证明产物完整、可复算和满足工程约束，不代表官方比赛提分。
