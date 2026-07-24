@@ -15,6 +15,7 @@ from ksllm4rec_rloo_dapo.checkpoint import (
     recovery_checkpoint_due,
     restore_training_state,
     save_recovery_checkpoint,
+    validate_recovery_checkpoint,
 )
 from ksllm4rec_rloo_dapo.config import approved_config
 from ksllm4rec_rloo_dapo.sampling import SourceCursor
@@ -67,7 +68,7 @@ class RecoveryTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            save_recovery_checkpoint(
+            checkpoint = save_recovery_checkpoint(
                 _Bundle(), optimizer, scheduler, _cursor(), root, _signature()
             )
             expected = (random.random(), float(np.random.rand()), torch.rand(3))
@@ -75,6 +76,8 @@ class RecoveryTest(unittest.TestCase):
             self.assertIsNotNone(loaded)
             _, cursor, state = loaded
             self.assertEqual(cursor, _cursor())
+            validated_cursor, _ = validate_recovery_checkpoint(checkpoint, _signature())
+            self.assertEqual(validated_cursor, _cursor())
 
             restored_parameter = torch.nn.Parameter(torch.tensor(1.0))
             restored_optimizer = torch.optim.AdamW([restored_parameter], lr=0.0)

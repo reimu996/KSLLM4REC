@@ -5,7 +5,6 @@ from dataclasses import dataclass
 
 from ksllm4rec_rloo_dapo.sampling import (
     DeterministicGroupStream,
-    SourceCursor,
     append_effective_groups,
 )
 

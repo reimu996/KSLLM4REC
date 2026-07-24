@@ -314,6 +314,15 @@ def load_latest_recovery(
     return checkpoint, cursor, state
 
 
+def validate_recovery_checkpoint(
+    checkpoint: Path, contract_signature: Mapping[str, Any]
+) -> tuple[RecoveryCursor, dict[str, Any]]:
+    """Validate one named complete checkpoint without mutating latest.json."""
+
+    _validate_signature(contract_signature)
+    return _load_checkpoint(Path(checkpoint), contract_signature)
+
+
 def restore_training_state(
     optimizer: torch.optim.Optimizer,
     scheduler: Any,
@@ -334,4 +343,5 @@ __all__ = [
     "restore_rng_state",
     "restore_training_state",
     "save_recovery_checkpoint",
+    "validate_recovery_checkpoint",
 ]

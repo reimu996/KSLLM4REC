@@ -37,7 +37,6 @@ from .objective import RewardOutput, clipped_rloo_token_sum, rewards_and_advanta
 from .rollout import (
     CacheRolloutStats,
     CanonicalCandidate,
-    CanonicalPromptRollout,
     PromptRequest,
     canonicalize_prompt_rollout,
     rollout_prompt_batch,
@@ -223,7 +222,9 @@ def load_groups_and_trie(
     return groups, trie
 
 
-def _prepare_prompt(bundle: PolicyModel, group: RecommendationGroup, cutoff: int) -> tuple[int, ...]:
+def _prepare_prompt(
+    bundle: PolicyModel, group: RecommendationGroup, cutoff: int
+) -> tuple[int, ...]:
     return tuple(
         encode_prompt(
             bundle.tokenizer,
@@ -259,9 +260,7 @@ def collect_effective_window(
             raise RuntimeError(
                 "A full dataset traversal did not produce 32 effective groups."
             )
-        raw_groups = stream.take_unique(
-            min(raw_batch_size, remaining_unique), seen_ids
-        )
+        raw_groups = stream.take_unique(min(raw_batch_size, remaining_unique), seen_ids)
         requests = tuple(
             PromptRequest(
                 group_id=group.group_id,
@@ -331,7 +330,10 @@ def collect_effective_window(
             )
         )
 
-    if len(retained) != target or len({item.group.group_id for item in retained}) != target:
+    if (
+        len(retained) != target
+        or len({item.group.group_id for item in retained}) != target
+    ):
         raise RuntimeError("Effective window is not exactly 32 unique groups.")
     return WindowCollection(
         groups=retained,
@@ -344,13 +346,17 @@ def collect_effective_window(
 
 
 def _trainable_parameters(bundle: PolicyModel) -> list[torch.nn.Parameter]:
-    values = [parameter for parameter in bundle.model.parameters() if parameter.requires_grad]
+    values = [
+        parameter for parameter in bundle.model.parameters() if parameter.requires_grad
+    ]
     if not values:
         raise RuntimeError("Policy has no trainable LoRA parameters.")
     return values
 
 
-def build_optimizer(bundle: PolicyModel, config: Mapping[str, Any]) -> torch.optim.Optimizer:
+def build_optimizer(
+    bundle: PolicyModel, config: Mapping[str, Any]
+) -> torch.optim.Optimizer:
     train = config["train"]
     kwargs: dict[str, Any] = {
         "lr": 0.0,
@@ -364,7 +370,10 @@ def build_optimizer(bundle: PolicyModel, config: Mapping[str, Any]) -> torch.opt
 
 
 def _candidate_old_tensors(
-    candidates: Sequence[CanonicalCandidate], *, device: torch.device, completion_width: int
+    candidates: Sequence[CanonicalCandidate],
+    *,
+    device: torch.device,
+    completion_width: int,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     old = torch.zeros(
         (len(candidates), int(completion_width)),
@@ -477,7 +486,9 @@ def train_minibatch(
     torch.nn.utils.clip_grad_norm_(parameters, float(config["train"]["max_grad_norm"]))
     optimizer.step()
     if not ratios or not all(math.isfinite(value) and value > 0.0 for value in ratios):
-        raise FloatingPointError("Optimizer minibatch ratios are not positive finite values.")
+        raise FloatingPointError(
+            "Optimizer minibatch ratios are not positive finite values."
+        )
     return OptimizerStepResult(
         loss=loss_sum / total_decisions,
         learning_rate=float(optimizer.param_groups[0]["lr"]),
@@ -520,16 +531,32 @@ def train_complete_window(
     )
     steps: list[OptimizerStepResult] = []
     for minibatch_index, minibatch in enumerate(minibatches):
-        steps.append(
-            train_minibatch(
-                bundle,
-                optimizer,
-                minibatch,
-                grammar,
-                config=config,
-                device=device,
-                enforce_replay_gate=minibatch_index == 0,
-            )
+        step = train_minibatch(
+            bundle,
+            optimizer,
+            minibatch,
+            grammar,
+            config=config,
+            device=device,
+            enforce_replay_gate=minibatch_index == 0,
+        )
+        steps.append(step)
+        print(
+            json.dumps(
+                {
+                    "event": "optimizer_step_complete",
+                    "window_index": int(window_index),
+                    "minibatch_index": minibatch_index,
+                    "loss": step.loss,
+                    "learning_rate": step.learning_rate,
+                    "ratio_min": step.ratio_min,
+                    "ratio_max": step.ratio_max,
+                    "clipped_tokens": step.clipped_tokens,
+                },
+                separators=(",", ":"),
+                allow_nan=False,
+            ),
+            flush=True,
         )
     scheduler.step()
     ids = tuple(group_id for step in steps for group_id in step.group_ids)
@@ -617,7 +644,9 @@ def _truncate_jsonl(path: Path, rows: int) -> None:
             json.loads(raw)
         except json.JSONDecodeError as exc:
             raise RuntimeError(f"Corrupt JSONL row {line_number}: {path}") from exc
-    if len(raw_lines) != rows or (path.stat().st_size and not raw_lines[-1].endswith(b"\n")):
+    if len(raw_lines) != rows or (
+        path.stat().st_size and not raw_lines[-1].endswith(b"\n")
+    ):
         temporary = path.with_name(f".{path.name}.truncate")
         temporary.write_bytes(b"".join(raw_lines[:rows]))
         os.replace(temporary, path)
@@ -632,7 +661,8 @@ def _group_log_rows(
             {
                 "schema_version": 1,
                 "window_index": int(window_index),
-                "effective_epoch": int(window_index) // contract.WINDOWS_PER_EFFECTIVE_EPOCH,
+                "effective_epoch": int(window_index)
+                // contract.WINDOWS_PER_EFFECTIVE_EPOCH,
                 "group_id": prepared.group.group_id,
                 "source_lines": list(prepared.group.source_lines),
                 "positive_sids": list(prepared.group.positive_sids),
@@ -718,14 +748,75 @@ def _write_run_contract(
     signature_path = output_dir / "runtime_signature.json"
     config_path = output_dir / "resolved_config.json"
     if signature_path.exists() or config_path.exists():
-        if (
-            json.loads(signature_path.read_text(encoding="utf-8")) != signature
-            or json.loads(config_path.read_text(encoding="utf-8")) != config
-        ):
-            raise RuntimeError("Existing run contract differs from this invocation.")
-        return
+        raise RuntimeError("A new run directory already contains contract files.")
     _atomic_json(signature_path, signature)
     _atomic_json(config_path, config)
+
+
+def _read_run_contract(path: Path, *, label: str) -> Any:
+    if not path.is_file():
+        raise RuntimeError(f"Existing run directory is missing {label}.")
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(
+            f"Existing run directory contains unreadable {label}."
+        ) from exc
+
+
+def _prepare_run_directory(
+    output_dir: Path,
+    config: Mapping[str, Any],
+    signature: Mapping[str, Any],
+    *,
+    resume: bool,
+) -> None:
+    """Claim a new directory or validate an existing directory without rewriting it."""
+
+    if output_dir.exists():
+        if not output_dir.is_dir():
+            raise FileExistsError(f"Output path is not a directory: {output_dir}")
+        is_non_empty = next(output_dir.iterdir(), None) is not None
+        if is_non_empty:
+            if not resume:
+                raise FileExistsError(f"Non-empty output directory: {output_dir}")
+            existing_signature = _read_run_contract(
+                output_dir / "runtime_signature.json",
+                label="runtime_signature.json",
+            )
+            existing_config = _read_run_contract(
+                output_dir / "resolved_config.json",
+                label="resolved_config.json",
+            )
+            if existing_signature != signature or existing_config != config:
+                raise RuntimeError(
+                    "Existing run contract differs from this invocation."
+                )
+            return
+    else:
+        output_dir.mkdir(parents=True)
+
+    _write_run_contract(output_dir, config, signature)
+
+
+def _ensure_epoch_adapters(
+    bundle: PolicyModel,
+    output: Path,
+    *,
+    completed_windows: int,
+) -> None:
+    completed_epochs = completed_windows // contract.WINDOWS_PER_EFFECTIVE_EPOCH
+    for epoch_number in range(1, completed_epochs + 1):
+        epoch_dir = output / f"epoch-{epoch_number:02d}-adapter"
+        if epoch_dir.exists():
+            continue
+        boundary = epoch_number * contract.WINDOWS_PER_EFFECTIVE_EPOCH
+        if completed_windows != boundary:
+            raise RuntimeError(
+                f"Missing epoch-{epoch_number:02d} adapter cannot be reconstructed "
+                f"from window {completed_windows}."
+            )
+        save_policy_atomic(bundle, epoch_dir)
 
 
 def _run_training_impl(
@@ -741,12 +832,9 @@ def _run_training_impl(
     """Run formal training or a complete-window pilot with exact recovery."""
 
     validate_runtime_signature(runtime_signature)
-    configure_deterministic_runtime(int(config["train"]["seed"]))
     output = Path(output_dir).expanduser().resolve()
-    if output.exists() and not resume and any(output.iterdir()):
-        raise FileExistsError(f"Non-empty output directory: {output}")
-    output.mkdir(parents=True, exist_ok=True)
-    _write_run_contract(output, config, runtime_signature)
+    _prepare_run_directory(output, config, runtime_signature, resume=resume)
+    configure_deterministic_runtime(int(config["train"]["seed"]))
     recovery_root = output / "recovery"
     recovery = (
         load_latest_recovery(recovery_root, runtime_signature) if resume else None
@@ -771,8 +859,11 @@ def _run_training_impl(
     _truncate_jsonl(group_log, cursor.group_log_rows)
 
     groups, trie = load_groups_and_trie(config)
-    bundle = load_policy_model(
-        config, device=device, policy_adapter_path=policy_path
+    bundle = load_policy_model(config, device=device, policy_adapter_path=policy_path)
+    _ensure_epoch_adapters(
+        bundle,
+        output,
+        completed_windows=cursor.next_window_index,
     )
     grammar = RecommendationGrammar(bundle.tokenizer, trie)
     optimizer = build_optimizer(bundle, config)
@@ -811,6 +902,21 @@ def _run_training_impl(
             aligned_cache=aligned_cache,
         )
         collection_seconds = time.perf_counter() - start
+        print(
+            json.dumps(
+                {
+                    "event": "collection_complete",
+                    "window_index": window_index,
+                    "raw_prompt_count": collection.raw_prompt_count,
+                    "effective_groups": len(collection.groups),
+                    "filtered_groups": collection.filtered_group_count,
+                    "seconds": collection_seconds,
+                },
+                separators=(",", ":"),
+                allow_nan=False,
+            ),
+            flush=True,
+        )
         collection_peak_reserved = (
             torch.cuda.max_memory_reserved(torch.device(device)) / 1024**3
             if torch.cuda.is_available() and torch.device(device).type == "cuda"
@@ -843,9 +949,7 @@ def _run_training_impl(
             raise RuntimeError(
                 f"Window reserved memory {peak_reserved:.3f} GiB exceeds the limit."
             )
-        _append_jsonl(
-            group_log, _group_log_rows(collection, window_index=window_index)
-        )
+        _append_jsonl(group_log, _group_log_rows(collection, window_index=window_index))
         _append_jsonl(
             window_log,
             [
@@ -863,21 +967,20 @@ def _run_training_impl(
         next_window = window_index + 1
         cursor = RecoveryCursor(
             next_window_index=next_window,
-            optimizer_update_step=(
-                next_window * contract.OPTIMIZER_UPDATES_PER_WINDOW
-            ),
+            optimizer_update_step=(next_window * contract.OPTIMIZER_UPDATES_PER_WINDOW),
             source_cursor=collection.source_cursor,
             window_log_rows=next_window,
             group_log_rows=next_window * contract.EFFECTIVE_GROUPS_PER_WINDOW,
         )
-        epoch_finished = (
-            next_window % contract.WINDOWS_PER_EFFECTIVE_EPOCH == 0
+        epoch_finished = next_window % contract.WINDOWS_PER_EFFECTIVE_EPOCH == 0
+        should_checkpoint = (
+            recovery_checkpoint_due(
+                cursor,
+                epoch_finished=epoch_finished,
+                interval_updates=int(config["train"]["resume_save_updates"]),
+            )
+            or next_window == requested_stop
         )
-        should_checkpoint = recovery_checkpoint_due(
-            cursor,
-            epoch_finished=epoch_finished,
-            interval_updates=int(config["train"]["resume_save_updates"]),
-        ) or next_window == requested_stop
         if should_checkpoint:
             checkpoint_path = recovery_root / (
                 f"checkpoint-window-{cursor.next_window_index:06d}"
@@ -898,6 +1001,21 @@ def _run_training_impl(
             epoch_dir = output / f"epoch-{epoch_number:02d}-adapter"
             if not epoch_dir.exists():
                 save_policy_atomic(bundle, epoch_dir)
+        print(
+            json.dumps(
+                {
+                    "event": "window_complete",
+                    "completed_windows": next_window,
+                    "optimizer_update_step": cursor.optimizer_update_step,
+                    "window_seconds": collection_seconds + training_seconds,
+                    "peak_reserved_gib": peak_reserved,
+                    "checkpoint_saved": bool(should_checkpoint),
+                },
+                separators=(",", ":"),
+                allow_nan=False,
+            ),
+            flush=True,
+        )
         windows_run += 1
 
     if cursor.next_window_index == total_windows:
@@ -910,7 +1028,9 @@ def _run_training_impl(
         "optimizer_update_step": cursor.optimizer_update_step,
         "windows_run_this_invocation": windows_run,
         "source_cursor": asdict(cursor.source_cursor),
-        "last_checkpoint": str(last_checkpoint) if last_checkpoint else None,
+        "last_checkpoint": (
+            last_checkpoint.relative_to(output).as_posix() if last_checkpoint else None
+        ),
         "complete": cursor.next_window_index == total_windows,
         "anchor_groups": 0,
         "gt_injection_count": 0,
@@ -930,8 +1050,27 @@ def run_training(
     stop_after_windows: int | None = None,
     aligned_cache: bool = True,
     dense_scoring: bool = False,
+    formal: bool = False,
 ) -> dict[str, Any]:
     """Run formal training or a gate-only implementation baseline."""
+
+    if formal:
+        expected_output = Path(config["output"]["run_dir"]).expanduser().resolve()
+        actual_output = Path(output_dir).expanduser().resolve()
+        if actual_output != expected_output:
+            raise ValueError(
+                "Formal training output_dir must equal config.output.run_dir."
+            )
+        if stop_after_windows is not None:
+            raise ValueError("Formal training cannot set stop_after_windows.")
+        if dense_scoring:
+            raise ValueError("Formal training cannot enable dense_scoring.")
+        if not aligned_cache:
+            raise ValueError("Formal training must enable aligned_cache.")
+        if torch.device(device) != torch.device(contract.EXECUTION_DEVICE):
+            raise ValueError(
+                f"Formal training device must be {contract.EXECUTION_DEVICE}."
+            )
 
     kwargs = {
         "output_dir": output_dir,

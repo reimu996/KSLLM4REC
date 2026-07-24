@@ -1,0 +1,118 @@
+schema_version: 1
+spec_version: RLOO-DAPO-T1.2-KV-v3-SFT372
+profile: frontier_sft_lora64_lr1p5em4_wd1em3_step372_rloo_dapo_t12_k1_kvcache
+model:
+  base_model: /home/lyc/models/OneReason-0.8B-pretrain-competition
+  sft_adapter: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/platform_exports/frontier_LORA_6464_000015_正则0001/checkpoint-372/train-task-tw1g09-1784715567-epoch2
+  tokenizer: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/platform_exports/frontier_LORA_6464_000015_正则0001/checkpoint-372/train-task-tw1g09-1784715567-epoch2
+  policy_adapter: default
+  attention: flash_attention_2
+  dtype: bfloat16
+  disable_dropout: true
+  lora_rank: 64
+  lora_alpha: 64
+  lora_dropout: 0.0
+data:
+  source: /home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/train.jsonl
+  provenance: /home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/provenance.jsonl
+  task: recommend
+  groups: 17016
+  positives: 30465
+  cutoff_len: 16384
+  prompt_mode: direct_no_think
+trie:
+  strategy: frontier_all_system_prompt_response_sids
+  unique_sids: 905469
+  domain_a_nodes: 10744
+  domain_ab_nodes: 429540
+rollout:
+  num_generations: 16
+  prompt_batch_size: 8
+  max_active_sequences: 16
+  candidates_per_prompt_wave: 2
+  max_completion_length: 32
+  do_sample: true
+  num_beams: 1
+  temperature: 1.2
+  top_k: 0
+  top_p: 1.0
+  retain_duplicates: true
+  use_kv_cache: true
+  kv_cache_budget_gib: 12.0
+  kv_cache_dtype: bfloat16
+  cache_fallback: uncached_single_prompt
+  sample_canonical_max_logp_difference: 0.005
+  canonical_replay_max_logp_difference: 0.00001
+  replay_buffer: false
+  num_iterations: 1
+sampling:
+  effective_groups_per_window: 32
+  filter: reward_range_positive
+  overflow: drop_and_audit
+  shuffle_complete_groups: true
+  max_unique_prompts_per_window: 17016
+  source_order: sha256_cycle_permutation
+reward:
+  exact: 1.0
+  same_ab: 0.40
+  same_a: 0.15
+  same_domain: 0.01
+  other_domain: 0.0
+  advantage: rloo
+  divide_by_std: false
+loss:
+  objective: rloo_asymmetric_clip
+  reference_free: true
+  decision_tokens_only: true
+  aggregation: minibatch_decision_token_mean
+  clip_ratio_low: 0.8
+  clip_ratio_high: 1.28
+  minibatch_groups: 8
+train:
+  effective_epochs: 2
+  windows_per_effective_epoch: 532
+  total_windows: 1064
+  total_optimizer_updates: 4256
+  optimizer_updates_per_window: 4
+  learning_rate: 0.000001
+  weight_decay: 0.0
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_epsilon: 0.00000001
+  max_grad_norm: 1.0
+  scheduler: constant_after_linear_warmup
+  warmup_windows: 10
+  scheduler_step_unit: rollout_window
+  gradient_checkpointing: true
+  bf16: true
+  tf32: true
+  seed: 42
+  logging_windows: 10
+  resume_save_updates: 100
+memory:
+  loss_chunk_size: 8
+  max_reserved_gib: 20.0
+  model_num_layers: 28
+  model_num_kv_heads: 8
+  model_head_dim: 128
+  cache_dtype_bytes: 2
+  max_observed_prompt_length: 2929
+gates:
+  parity_groups: 64
+  throughput_groups: 64
+  end_to_end_windows: 1
+  pilot_windows: 2
+  min_rollout_speedup: 1.5
+  min_window_speedup: 1.2
+  require_all_legal: true
+  require_all_finite: true
+evaluation:
+  fixed_probe: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/data/frontier_probe_v1/fixed_probe_1024.jsonl
+  num_beams: 16
+  do_sample: false
+  max_completion_length: 32
+output:
+  groups_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/data/recommend_groups_frontier_v1
+  trie_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/catalog/frontier_all_system_prompt_response_sids_v1
+  run_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/rloo/runs/frontier_sft_lora64_lr1p5em4_wd1em3_step372_rloo_dapo_t12_k1_kvcache_2effective_epochs
+  log_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/operation_logs/rloo/frontier_sft_lora64_lr1p5em4_wd1em3_step372_rloo_dapo_t12_k1_kvcache_v3

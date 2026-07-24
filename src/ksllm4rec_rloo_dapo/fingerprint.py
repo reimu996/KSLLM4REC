@@ -8,6 +8,8 @@ from typing import Any, Iterable
 from ksllm4rec_rloo.fingerprint import frozen_model_inputs, software_versions
 from ksllm4rec_rloo.integrity import canonical_sha256, file_record, snapshot_directory
 
+from . import contract
+
 
 _PACKAGE_ROOT = Path(__file__).resolve().parent
 _PROJECT_ROOT = _PACKAGE_ROOT.parents[1]
@@ -42,8 +44,14 @@ def discover_runtime_code_files(
         paths.extend(
             path
             for path in script_root.rglob("*")
-            if path.is_file() and path.suffix in {".py", ".sh"}
+            if path.is_file()
+            and path.suffix in {".py", ".sh"}
+            and path.name != "status.sh"
         )
+    for suite in ("rloo_dapo", "rloo", "sft", "grpo", "orpo"):
+        suite_root = root / "tests" / suite
+        if suite_root.is_dir():
+            paths.extend(suite_root.rglob("*.py"))
     result = tuple(sorted({path.resolve() for path in paths}))
     if not result:
         raise RuntimeError("Runtime code fingerprint contains no files.")
@@ -112,6 +120,17 @@ def runtime_signature(
             "cudnn_deterministic": True,
             "cudnn_benchmark": False,
         },
+        **(
+            {
+                "execution_target": {
+                    "device": contract.EXECUTION_DEVICE,
+                    "cuda_visible_devices": (contract.EXECUTION_CUDA_VISIBLE_DEVICES),
+                    "gpu_identity": dict(contract.EXPECTED_GPU_IDENTITY),
+                }
+            }
+            if config.get("profile") == contract.SFT372_PROFILE
+            else {}
+        ),
         "runtime_code": runtime_code_fingerprint(
             project_root, runtime_code_files=runtime_code_files
         ),

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Mapping
 
 import yaml
@@ -145,6 +146,25 @@ APPROVED_CONFIG: dict[str, Any] = {
 }
 
 
+def _config_for_profile(profile: contract.FrozenProfile) -> dict[str, Any]:
+    value = deepcopy(APPROVED_CONFIG)
+    value["spec_version"] = profile.spec_version
+    value["profile"] = profile.name
+    value["model"]["sft_adapter"] = str(profile.sft_adapter)
+    value["model"]["tokenizer"] = str(profile.tokenizer)
+    value["output"]["run_dir"] = str(profile.run_dir)
+    value["output"]["log_dir"] = str(profile.log_dir)
+    return value
+
+
+APPROVED_CONFIGS = MappingProxyType(
+    {
+        name: _config_for_profile(profile)
+        for name, profile in contract.FROZEN_PROFILES.items()
+    }
+)
+
+
 FORBIDDEN_KEY_PARTS = (
     "anchor",
     "lambda0",
@@ -161,8 +181,12 @@ FORBIDDEN_KEY_PARTS = (
 )
 
 
-def approved_config() -> dict[str, Any]:
-    return deepcopy(APPROVED_CONFIG)
+def approved_config(profile: str = contract.PROFILE) -> dict[str, Any]:
+    try:
+        value = APPROVED_CONFIGS[profile]
+    except KeyError as exc:
+        raise ValueError(f"Unknown RLOO-DAPO profile: {profile!r}.") from exc
+    return deepcopy(value)
 
 
 def _flatten(value: Mapping[str, Any], prefix: str = "") -> dict[str, Any]:
@@ -178,12 +202,19 @@ def _flatten(value: Mapping[str, Any], prefix: str = "") -> dict[str, Any]:
     return result
 
 
-EXPECTED_VALUES = _flatten(APPROVED_CONFIG)
+EXPECTED_VALUES = _flatten(APPROVED_CONFIGS[contract.PROFILE])
+EXPECTED_VALUES_BY_PROFILE = MappingProxyType(
+    {name: _flatten(value) for name, value in APPROVED_CONFIGS.items()}
+)
 
 
 def validate_config(value: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise ValueError("RLOO-DAPO config must be a mapping.")
+    profile = value.get("profile")
+    if not isinstance(profile, str) or profile not in EXPECTED_VALUES_BY_PROFILE:
+        raise ValueError(f"Unknown RLOO-DAPO profile: {profile!r}.")
+    expected_values = EXPECTED_VALUES_BY_PROFILE[profile]
     actual = _flatten(value)
     forbidden = sorted(
         key
@@ -191,11 +222,11 @@ def validate_config(value: Mapping[str, Any]) -> dict[str, Any]:
         if any(part in key.lower() for part in FORBIDDEN_KEY_PARTS)
         or key.lower().endswith(".kl")
     )
-    missing = sorted(set(EXPECTED_VALUES) - set(actual))
-    unknown = sorted(set(actual) - set(EXPECTED_VALUES))
+    missing = sorted(set(expected_values) - set(actual))
+    unknown = sorted(set(actual) - set(expected_values))
     mismatches = {
         key: {"expected": expected, "actual": actual.get(key)}
-        for key, expected in EXPECTED_VALUES.items()
+        for key, expected in expected_values.items()
         if key in actual and actual[key] != expected
     }
     if forbidden or missing or unknown or mismatches:
@@ -214,4 +245,9 @@ def load_config(path: Path) -> dict[str, Any]:
     return validate_config(value)
 
 
-__all__ = ["approved_config", "load_config", "validate_config"]
+__all__ = [
+    "APPROVED_CONFIGS",
+    "approved_config",
+    "load_config",
+    "validate_config",
+]
