@@ -15,8 +15,8 @@ from typing import Sequence
 import torch
 from torch.nn.functional import log_softmax
 
-from ksllm4rec_orpo.data import Sid
-from ksllm4rec_rloo.objective import sid_reward
+from ._infra.orpo_data import Sid
+from ._infra.rloo_objective import sid_reward
 
 from . import contract
 

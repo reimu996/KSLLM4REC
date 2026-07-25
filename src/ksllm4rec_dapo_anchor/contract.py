@@ -1,52 +1,80 @@
-"""Frozen identities and shared constants for DAPO-Anchor profiles."""
+"""Frozen identities and shared constants for DAPO-Anchor profiles.
+
+Every constant here is a *literal* — no forwarding through `_infra.dapo_contract`
+or any sibling package. This is the top-level contract seen by trainer.py /
+objective.py / verify.py / config.py of the DAPO-Anchor method.
+
+Values were captured at vendor commit 213a1002. Bit-for-bit identical to the
+pre-vendor state in which these constants were transitively forwarded through
+`ksllm4rec_rloo_dapo.contract → ksllm4rec_rloo.contract`.
+
+Cross-check (must all still hold):
+    from ksllm4rec_dapo_anchor import contract as c
+    from ksllm4rec_dapo_anchor._infra import dapo_contract as legacy
+    assert c.BASE_MODEL_SHA256 == legacy.BASE_MODEL_SHA256   # etc.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 from types import MappingProxyType
 
-from ksllm4rec_rloo_dapo import contract as dapo_legacy
-
 
 SCHEMA_VERSION = 1
 SPEC_VERSION = "DAPO-ANCHOR-V1"
 PROFILE = "frontier_sft_epoch2_dapo_anchor"
 
+PROJECT_ROOT = Path("/home/lyc/REC_PROJECTS/KSLLM4REC")
 
-# ── SFT 起点 (复用 RLOO-DAPO 原版) ────────────────────────────────
-BASE_MODEL = dapo_legacy.BASE_MODEL
-SOURCE_DATA = dapo_legacy.SOURCE_DATA
-PROVENANCE = dapo_legacy.PROVENANCE
-GROUPS_DIR = dapo_legacy.GROUPS_DIR
-TRIE_DIR = dapo_legacy.TRIE_DIR
-FIXED_PROBE = dapo_legacy.FIXED_PROBE
 
-BASE_MODEL_SHA256 = dapo_legacy.BASE_MODEL_SHA256
-SOURCE_DATA_SHA256 = dapo_legacy.SOURCE_DATA_SHA256
-PROVENANCE_SHA256 = dapo_legacy.PROVENANCE_SHA256
-GROUPS_SHA256 = dapo_legacy.GROUPS_SHA256
-TRIE_MANIFEST_SHA256 = dapo_legacy.TRIE_MANIFEST_SHA256
-FIXED_PROBE_SHA256 = dapo_legacy.FIXED_PROBE_SHA256
+# ── SFT 起点 (与 RLOO-DAPO 原版数值等同, 已落地为字面量) ─────────────
+BASE_MODEL = Path("/home/lyc/models/OneReason-0.8B-pretrain-competition")
+SOURCE_DATA = Path(
+    "/home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/train.jsonl"
+)
+PROVENANCE = Path(
+    "/home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/provenance.jsonl"
+)
+GROUPS_DIR = (
+    PROJECT_ROOT / "artifacts/grpo/data/recommend_groups_frontier_v1"
+)
+TRIE_DIR = (
+    PROJECT_ROOT
+    / "artifacts/grpo/catalog/frontier_all_system_prompt_response_sids_v1"
+)
+FIXED_PROBE = (
+    PROJECT_ROOT / "artifacts/grpo/data/frontier_probe_v1/fixed_probe_1024.jsonl"
+)
 
-EXPECTED_SOURCE_ROWS = dapo_legacy.EXPECTED_SOURCE_ROWS
-EXPECTED_RECOMMEND_ROWS = dapo_legacy.EXPECTED_RECOMMEND_ROWS
-EXPECTED_RECOMMEND_GROUPS = dapo_legacy.EXPECTED_RECOMMEND_GROUPS
-EXPECTED_POSITIVE_EDGES = dapo_legacy.EXPECTED_POSITIVE_EDGES
-EXPECTED_UNIQUE_POSITIVE_SIDS = dapo_legacy.EXPECTED_UNIQUE_POSITIVE_SIDS
-EXPECTED_TRIE_LEAVES = dapo_legacy.EXPECTED_TRIE_LEAVES
-EXPECTED_DOMAIN_A_NODES = dapo_legacy.EXPECTED_DOMAIN_A_NODES
-EXPECTED_DOMAIN_AB_NODES = dapo_legacy.EXPECTED_DOMAIN_AB_NODES
+BASE_MODEL_SHA256 = "28e66d2ec528473d335ede2b3faa08eddc53eb8ec93747a449e5e7ec812ede90"
+SOURCE_DATA_SHA256 = "9e3465cedbdaf784ab4720699649c76c256414e2c2089efcd7657f63bae7449a"
+PROVENANCE_SHA256 = "e56dddff865780273573e06e5a44d4c1dd9a27013c78c166aa6565f7b9ad8908"
+GROUPS_SHA256 = "a2571d97e4ac231d61d1f468bc23b8e65bebfd5ad7b1a2dd566f1bfd86a9658e"
+TRIE_MANIFEST_SHA256 = "f51414b13a8982605ebe1f7fec75929245db60c854e3860d3b6c1625a3f33e4a"
+FIXED_PROBE_SHA256 = "86e050a00506efbaef0e49997ed138462aaddc322eba9fc66227a25654a75e5e"
 
-POLICY_ADAPTER = dapo_legacy.POLICY_ADAPTER
-LORA_RANK = dapo_legacy.LORA_RANK
-LORA_ALPHA = dapo_legacy.LORA_ALPHA
-LORA_DROPOUT = dapo_legacy.LORA_DROPOUT
-LORA_TARGET_MODULES = dapo_legacy.LORA_TARGET_MODULES
-EXPECTED_LORA_TENSOR_COUNT = dapo_legacy.EXPECTED_LORA_TENSOR_COUNT
-EXPECTED_LORA_PARAMETER_COUNT = dapo_legacy.EXPECTED_LORA_PARAMETER_COUNT
+EXPECTED_SOURCE_ROWS = 63_700
+EXPECTED_RECOMMEND_ROWS = 30_902
+EXPECTED_RECOMMEND_GROUPS = 17_016
+EXPECTED_POSITIVE_EDGES = 30_465
+EXPECTED_UNIQUE_POSITIVE_SIDS = 29_414
+EXPECTED_TRIE_LEAVES = 905_469
+EXPECTED_DOMAIN_A_NODES = 10_744
+EXPECTED_DOMAIN_AB_NODES = 429_540
+
+POLICY_ADAPTER = "default"
+LORA_RANK = 64
+LORA_ALPHA = 64
+LORA_DROPOUT = 0.0
+LORA_TARGET_MODULES = frozenset(
+    {"q_proj", "k_proj", "v_proj", "o_proj",
+     "gate_proj", "up_proj", "down_proj"}
+)
+EXPECTED_LORA_TENSOR_COUNT = 392
+EXPECTED_LORA_PARAMETER_COUNT = 40_370_176
 
 SFT372_ADAPTER = (
-    dapo_legacy.PROJECT_ROOT / "artifacts/sft/platform_exports/"
+    PROJECT_ROOT / "artifacts/sft/platform_exports/"
     "frontier_LORA_6464_000015_正则0001/checkpoint-372/"
     "train-task-tw1g09-1784715567-epoch2"
 )

@@ -23,39 +23,39 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 import torch
 
-from ksllm4rec_grpo.constraint import RecommendationGrammar
-from ksllm4rec_grpo.data import RecommendationGroup, iter_groups
-from ksllm4rec_grpo.prompt import encode_prompt
-from ksllm4rec_grpo.trie import SidPrefixTrie
-from ksllm4rec_orpo.data import Sid
-from ksllm4rec_rloo.checkpoint import save_policy_atomic
-from ksllm4rec_rloo.modeling import PolicyModel, load_policy_model
-from ksllm4rec_rloo_dapo.checkpoint import (
+from ._infra.grpo_constraint import RecommendationGrammar
+from ._infra.grpo_data import RecommendationGroup, iter_groups
+from ._infra.grpo_prompt import encode_prompt
+from ._infra.grpo_trie import SidPrefixTrie
+from ._infra.orpo_data import Sid
+from ._infra.rloo_checkpoint import save_policy_atomic
+from ._infra.rloo_modeling import PolicyModel, load_policy_model
+from ._infra.dapo_checkpoint import (
     RecoveryCursor,
     load_latest_recovery,
     recovery_checkpoint_due,
     restore_training_state,
     save_recovery_checkpoint,
 )
-from ksllm4rec_rloo_dapo.fingerprint import validate_runtime_signature
-from ksllm4rec_rloo_dapo.rollout import (
+from ._infra.dapo_fingerprint import validate_runtime_signature
+from ._infra.dapo_rollout import (
     CacheRolloutStats,
     CanonicalCandidate,
     PromptRequest,
     canonicalize_prompt_rollout,
     rollout_prompt_batch,
 )
-from ksllm4rec_rloo_dapo.sampling import (
+from ._infra.dapo_sampling import (
     DeterministicGroupStream,
     SourceCursor,
     append_effective_groups,
 )
-from ksllm4rec_rloo_dapo.scoring import (
+from ._infra.dapo_scoring import (
     dense_scoring_mode,
     grammar_completion_width,
     score_completions_dense_fixed,
 )
-from ksllm4rec_rloo.scoring import score_completions
+from ._infra.rloo_scoring import score_completions
 
 from . import contract
 from .objective import (
