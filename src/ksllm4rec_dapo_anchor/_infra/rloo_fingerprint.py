@@ -11,7 +11,8 @@ from .rloo_integrity import canonical_sha256, file_record, snapshot_directory
 
 
 _PACKAGE_ROOT = Path(__file__).resolve().parent
-_PROJECT_ROOT = _PACKAGE_ROOT.parents[1]
+# Vendored into ksllm4rec_dapo_anchor/_infra/ — parents[2] hits the project root.
+_PROJECT_ROOT = _PACKAGE_ROOT.parents[2]
 
 _BASE_REQUIRED_FILES = ("config.json",)
 _BASE_OPTIONAL_FILES = (

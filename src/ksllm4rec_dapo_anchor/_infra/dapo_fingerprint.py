@@ -12,7 +12,9 @@ from . import dapo_contract as contract
 
 
 _PACKAGE_ROOT = Path(__file__).resolve().parent
-_PROJECT_ROOT = _PACKAGE_ROOT.parents[1]
+# Vendored into ksllm4rec_dapo_anchor/_infra/ — one deeper than the original
+# ksllm4rec_rloo_dapo/, so parents[2] instead of parents[1].
+_PROJECT_ROOT = _PACKAGE_ROOT.parents[2]
 
 
 def _file(path: Path) -> dict[str, Any]:
