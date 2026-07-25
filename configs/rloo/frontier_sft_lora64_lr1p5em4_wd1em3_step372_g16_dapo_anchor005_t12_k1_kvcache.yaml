@@ -1,0 +1,90 @@
+# DAPO-Anchor: Group-Relative DAPO with post-RL GT anchor loss.
+# 继承 SFT checkpoint-372, frontier_v1 训练数据, 2 effective epochs.
+#
+# Design:
+#   Phase 1 — RL:  clipped group-relative (r - mean) / std, G=16, K=1
+#   Phase 2 — Anchor: teacher-forced GT -logsumexp, λ=0.05 fixed, B=16
+
+schema_version: 1
+spec_version: "DAPO-ANCHOR-V1-SFT372"
+profile: "frontier_sft_epoch2_dapo_anchor_sft372"
+
+data:
+  source: "/home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/train.jsonl"
+  provenance: "/home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/provenance.jsonl"
+  cutoff_len: 32768
+  source_rows: 63700
+  recommend_rows: 30902
+  groups: 17016
+  positive_edges: 30465
+  unique_positive_sids: 29414
+
+trie:
+  unique_sids: 905469
+  domain_a_nodes: 10744
+  domain_ab_nodes: 429540
+
+model:
+  base: "/home/lyc/models/OneReason-0.8B-pretrain-competition"
+  base_sha256: "28e66d2ec528473d335ede2b3faa08eddc53eb8ec93747a449e5e7ec812ede90"
+  # SFT checkpoint-372
+  source_sha256: "4d6b29d76974c9a1517c1b583858e744cae019cb26e1e2d90066e237ebbcf5f8"
+  provenance_sha256: "e56dddff865780273573e06e5a44d4c1dd9a27013c78c166aa6565f7b9ad8908"
+  groups_sha256: "1c85ad933db46284d1417b7c2e83e31c2d379997a4e966439435f04ca75a243f"
+  trie_manifest_sha256: "737b2f69a568ba21d707f88b9fbd52a2d3c53ebb1b3aab6f2478e87530dbc066"
+  fixed_probe_sha256: "86e050a00506efbaef0e49997ed138462aaddc322eba9fc66227a25654a75e5e"
+  lora_rank: 64
+  lora_alpha: 64
+  lora_dropout: 0.0
+  lora_target_modules: ["q_proj", "k_proj", "v_proj", "o_proj"]
+
+rollout:
+  temperature: 1.2
+  prompt_batch_size: 8
+  max_active_sequences: 16
+  candidates_per_prompt_wave: 2
+  sample_canonical_max_logp_difference: 0.005
+  canonical_replay_max_logp_difference: 1.0e-5
+
+loss:
+  clip_ratio_low: 0.8
+  clip_ratio_high: 1.28
+
+anchor:
+  weight: 0.05
+  batch_size: 16
+  warmup_windows: 10
+
+sampling:
+  effective_groups_per_window: 32
+  max_unique_prompts_per_window: 17016
+
+train:
+  seed: 42
+  effective_epochs: 2
+  windows_per_effective_epoch: 532
+  total_windows: 1064
+  learning_rate: 1.0e-6
+  warmup_windows: 10
+  max_grad_norm: 1.0
+  weight_decay: 0.0
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_epsilon: 1.0e-8
+  scheduler: "constant_after_linear_warmup"
+  scheduler_step_unit: "rollout_window"
+  resume_save_updates: 4
+  num_iterations: 1
+
+memory:
+  kv_cache_budget_gib: 12.0
+  max_reserved_gib: 20.0
+
+gpu:
+  device: "cuda:0"
+  cuda_visible_devices: "0"
+
+output:
+  groups_dir: "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/data/recommend_groups_frontier_v1"
+  trie_dir: "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/catalog/frontier_all_system_prompt_response_sids_v1"
+  run_dir: "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/rloo/runs/dapo_anchor_sft372_2effective_epochs"

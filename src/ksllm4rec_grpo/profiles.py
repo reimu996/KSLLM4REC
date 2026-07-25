@@ -17,6 +17,7 @@ PROJECT_ROOT = Path("/home/lyc/REC_PROJECTS/KSLLM4REC")
 BASE_MODEL = Path("/home/lyc/models/OneReason-0.8B-pretrain-competition")
 DEFAULT_PROFILE_NAME = "baseline_v3_1"
 FRONTIER_PROFILE_NAME = "frontier_sft_epoch2_v2"
+DAPO_ANCHOR_PROFILE_NAME = "frontier_sft_epoch2_dapo_anchor"
 
 
 @dataclass(frozen=True)
@@ -147,8 +148,59 @@ FRONTIER_PROFILE = GRPOProfile(
 )
 
 
+DAPO_ANCHOR_PROFILE = GRPOProfile(
+    name=DAPO_ANCHOR_PROFILE_NAME,
+    spec_version="2.0",
+    schema_version=4,
+    base_model=BASE_MODEL,
+    sft_adapter=PROJECT_ROOT
+    / "artifacts/sft/platform_exports/"
+    "frontier_LORA_6464_000015_正则0001/checkpoint-372/"
+    "train-task-tw1g09-1784715567-epoch2",
+    tokenizer=PROJECT_ROOT
+    / "artifacts/sft/platform_exports/"
+    "frontier_LORA_6464_000015_正则0001/checkpoint-372/"
+    "train-task-tw1g09-1784715567-epoch2",
+    source=Path("/home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/train.jsonl"),
+    provenance=Path(
+        "/home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/provenance.jsonl"
+    ),
+    fixed_probe=PROJECT_ROOT / "artifacts/grpo/data/frontier_probe_v1/fixed_probe_1024.jsonl",
+    groups_dir=PROJECT_ROOT / "artifacts/grpo/data/recommend_groups_frontier_v1",
+    trie_dir=PROJECT_ROOT
+    / "artifacts/grpo/catalog/frontier_all_system_prompt_response_sids_v1",
+    run_dir=PROJECT_ROOT
+    / "artifacts/rloo/runs/dapo_anchor_sft372_2effective_epochs",
+    log_dir=PROJECT_ROOT / "operation_logs/rloo/dapo_anchor_sft372",
+    source_sha256="9e3465cedbdaf784ab4720699649c76c256414e2c2089efcd7657f63bae7449a",
+    provenance_sha256="e56dddff865780273573e06e5a44d4c1dd9a27013c78c166aa6565f7b9ad8908",
+    adapter_sha256="699826c7a276b463f7fe8195a0ee6297083d109a6afe23f161f0985b65684ecb",
+    adapter_config_sha256="55969781f9f855ca35ad5133cb5d0db50f6f8466ce7b078603f26258523e5363",
+    groups_sha256="a2571d97e4ac231d61d1f468bc23b8e65bebfd5ad7b1a2dd566f1bfd86a9658e",
+    trie_manifest_sha256="f51414b13a8982605ebe1f7fec75929245db60c854e3860d3b6c1625a3f33e4a",
+    fixed_probe_sha256="86e050a00506efbaef0e49997ed138462aaddc322eba9fc66227a25654a75e5e",
+    source_rows=63_700,
+    recommend_rows=30_902,
+    groups=17_016,
+    positives=30_465,
+    unique_positive_sids=29_414,
+    unique_sids=905_469,
+    domain_a_nodes=10_744,
+    domain_ab_nodes=429_540,
+    domain_sids=MappingProxyType(
+        {"ad": 121_769, "living": 35_907, "prod": 309_414, "video": 438_379}
+    ),
+    trie_strategy="frontier_all_system_prompt_response_sids",
+    probe_reachable=MappingProxyType({"text_to_sid": 512, "recommend": 512}),
+)
+
+
 PROFILES = MappingProxyType(
-    {BASELINE_PROFILE.name: BASELINE_PROFILE, FRONTIER_PROFILE.name: FRONTIER_PROFILE}
+    {
+        BASELINE_PROFILE.name: BASELINE_PROFILE,
+        FRONTIER_PROFILE.name: FRONTIER_PROFILE,
+        DAPO_ANCHOR_PROFILE.name: DAPO_ANCHOR_PROFILE,
+    }
 )
 PROFILE_NAMES = tuple(PROFILES)
 
