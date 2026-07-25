@@ -97,6 +97,13 @@ CLIP_RATIO_HIGH = 1.28
 SAMPLE_CANONICAL_MAX_LOGP_DIFF = 5.0e-3
 CANONICAL_REPLAY_MAX_LOGP_DIFF = 1.0e-5
 
+# ── Model / runtime field values consumed by config ────────────────────
+POLICY_ADAPTER_NAME = "default"
+ATTENTION = "flash_attention_2"
+DTYPE = "bfloat16"
+DISABLE_DROPOUT = True
+GRADIENT_CHECKPOINTING = True
+
 # ── Anchor 常量 ──────────────────────────────────────────────────────
 ANCHOR_WEIGHT = 0.05          # 固定小权重, RL:anchor ≈ 20:1
 ANCHOR_BATCH_SIZE = 16        # anchor phase 每 optimizer.step 的组数

@@ -1,90 +1,129 @@
-# DAPO-Anchor: Group-Relative DAPO with post-RL GT anchor loss.
-# 继承 SFT checkpoint-372, frontier_v1 训练数据, 2 effective epochs.
+# DAPO-Anchor: mean-centred advantage + anchor loss.
+# Inherits SFT checkpoint-372, frontier_v1 training data, 2 effective epochs.
 #
-# Design:
-#   Phase 1 — RL:  clipped group-relative (r - mean) / std, G=16, K=1
-#   Phase 2 — Anchor: teacher-forced GT -logsumexp, λ=0.05 fixed, B=16
+# Architecture:
+#   Phase 1 — RL:  clipped group-relative (r - mean), no std division
+#   Phase 2 — Anchor: teacher-forced GT -mean(logp) on filter groups
+#                     λ=0.05 fixed, B=16, warmup 10 windows
+#   Advantage: A_i = r_i - mean  (not (r - mean) / std, not leave-one-out)
+#   Prefix tree: frontier_v1 905k unique SIDs (unchanged from DAPO)
 
 schema_version: 1
 spec_version: "DAPO-ANCHOR-V1-SFT372"
-profile: "frontier_sft_epoch2_dapo_anchor_sft372"
+profile: "frontier_sft_lora64_lr1p5em4_wd1em3_step372_dapo_anchor005_t12_k1_kvcache"
+
+model:
+  base_model: /home/lyc/models/OneReason-0.8B-pretrain-competition
+  # SFT checkpoint-372 LoRA (r=64, alpha=64, dropout=0.05 at source, closed at RL runtime)
+  sft_adapter: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/platform_exports/frontier_LORA_6464_000015_正则0001/checkpoint-372/train-task-tw1g09-1784715567-epoch2
+  tokenizer:   /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/platform_exports/frontier_LORA_6464_000015_正则0001/checkpoint-372/train-task-tw1g09-1784715567-epoch2
+  policy_adapter: default
+  attention: flash_attention_2
+  dtype: bfloat16
+  disable_dropout: true
+  lora_rank: 64
+  lora_alpha: 64
+  lora_dropout: 0.0
 
 data:
-  source: "/home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/train.jsonl"
-  provenance: "/home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/provenance.jsonl"
-  cutoff_len: 32768
-  source_rows: 63700
-  recommend_rows: 30902
+  source: /home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/train.jsonl
+  provenance: /home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/provenance.jsonl
+  task: recommend
   groups: 17016
-  positive_edges: 30465
-  unique_positive_sids: 29414
+  positives: 30465
+  cutoff_len: 16384
+  prompt_mode: direct_no_think
 
 trie:
+  strategy: frontier_all_system_prompt_response_sids
   unique_sids: 905469
   domain_a_nodes: 10744
   domain_ab_nodes: 429540
 
-model:
-  base: "/home/lyc/models/OneReason-0.8B-pretrain-competition"
-  base_sha256: "28e66d2ec528473d335ede2b3faa08eddc53eb8ec93747a449e5e7ec812ede90"
-  # SFT checkpoint-372
-  source_sha256: "4d6b29d76974c9a1517c1b583858e744cae019cb26e1e2d90066e237ebbcf5f8"
-  provenance_sha256: "e56dddff865780273573e06e5a44d4c1dd9a27013c78c166aa6565f7b9ad8908"
-  groups_sha256: "1c85ad933db46284d1417b7c2e83e31c2d379997a4e966439435f04ca75a243f"
-  trie_manifest_sha256: "737b2f69a568ba21d707f88b9fbd52a2d3c53ebb1b3aab6f2478e87530dbc066"
-  fixed_probe_sha256: "86e050a00506efbaef0e49997ed138462aaddc322eba9fc66227a25654a75e5e"
-  lora_rank: 64
-  lora_alpha: 64
-  lora_dropout: 0.0
-  lora_target_modules: ["q_proj", "k_proj", "v_proj", "o_proj"]
-
 rollout:
-  temperature: 1.2
+  num_generations: 16
   prompt_batch_size: 8
   max_active_sequences: 16
   candidates_per_prompt_wave: 2
+  max_completion_length: 32
+  do_sample: true
+  num_beams: 1
+  temperature: 1.2
+  top_k: 0
+  top_p: 1.0
+  retain_duplicates: true
+  use_kv_cache: true
+  kv_cache_budget_gib: 12.0
+  kv_cache_dtype: bfloat16
+  cache_fallback: uncached_single_prompt
   sample_canonical_max_logp_difference: 0.005
-  canonical_replay_max_logp_difference: 1.0e-5
+  canonical_replay_max_logp_difference: 0.00001
+  replay_buffer: false
+  num_iterations: 1
+
+sampling:
+  effective_groups_per_window: 32
+  filter: reward_range_positive
+  overflow: drop_and_audit
+  shuffle_complete_groups: true
+  max_unique_prompts_per_window: 17016
+  source_order: sha256_cycle_permutation
 
 loss:
+  objective: dapo_anchor_asymmetric_clip
+  reference_free: true
+  decision_tokens_only: true
+  aggregation: minibatch_decision_token_mean
   clip_ratio_low: 0.8
   clip_ratio_high: 1.28
+  minibatch_groups: 8
 
 anchor:
   weight: 0.05
   batch_size: 16
   warmup_windows: 10
 
-sampling:
-  effective_groups_per_window: 32
-  max_unique_prompts_per_window: 17016
-
 train:
-  seed: 42
   effective_epochs: 2
   windows_per_effective_epoch: 532
   total_windows: 1064
+  total_optimizer_updates: 4256
+  optimizer_updates_per_window: 4
   learning_rate: 1.0e-6
-  warmup_windows: 10
-  max_grad_norm: 1.0
   weight_decay: 0.0
   adam_beta1: 0.9
   adam_beta2: 0.999
   adam_epsilon: 1.0e-8
-  scheduler: "constant_after_linear_warmup"
-  scheduler_step_unit: "rollout_window"
+  max_grad_norm: 1.0
+  scheduler: constant_after_linear_warmup
+  warmup_windows: 10
+  scheduler_step_unit: rollout_window
+  gradient_checkpointing: true
+  bf16: true
+  tf32: true
+  seed: 42
+  logging_windows: 10
   resume_save_updates: 4
   num_iterations: 1
 
 memory:
-  kv_cache_budget_gib: 12.0
+  loss_chunk_size: 8
   max_reserved_gib: 20.0
+  kv_cache_budget_gib: 12.0
+  model_num_layers: 28
+  model_num_kv_heads: 8
+  model_head_dim: 128
+  cache_dtype_bytes: 2
+  max_observed_prompt_length: 2929
 
-gpu:
-  device: "cuda:0"
-  cuda_visible_devices: "0"
+evaluation:
+  fixed_probe: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/data/frontier_probe_v1/fixed_probe_1024.jsonl
+  num_beams: 16
+  do_sample: false
+  max_completion_length: 32
 
 output:
-  groups_dir: "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/data/recommend_groups_frontier_v1"
-  trie_dir: "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/catalog/frontier_all_system_prompt_response_sids_v1"
-  run_dir: "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/rloo/runs/dapo_anchor_sft372_2effective_epochs"
+  groups_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/data/recommend_groups_frontier_v1
+  trie_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/catalog/frontier_all_system_prompt_response_sids_v1
+  run_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/rloo/runs/dapo_anchor_sft372_2effective_epochs
+  log_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/operation_logs/rloo/dapo_anchor_sft372

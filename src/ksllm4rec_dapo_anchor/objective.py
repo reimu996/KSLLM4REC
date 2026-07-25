@@ -43,19 +43,17 @@ def is_effective_rewards(rewards: torch.Tensor) -> bool:
 
 
 def group_relative_advantages(rewards: torch.Tensor) -> torch.Tensor:
-    """DAPO/GRPO advantage: (r - mean) / std.
+    """Group-relative advantage: A_i = r_i - mean.
 
-    std 加 eps 防 0 (effective 组不会全相同, 但等价防线).
+    不除 std,不做 leave-one-out。是仅居中的 group advantage,与 DAPO 论文
+    以及 RLOO 都不同。
     """
     if rewards.shape != (contract.GROUP_SIZE,):
         raise ValueError(f"rewards must have shape ({contract.GROUP_SIZE},).")
     values = rewards.float()
     if not bool(torch.isfinite(values).all()):
         raise FloatingPointError("rewards contain NaN or Inf.")
-    std = values.std(correction=0)
-    if not bool(torch.isfinite(std).all()) or float(std.item()) <= 0.0:
-        raise FloatingPointError("Group std is non-positive; not effective.")
-    return (values - values.mean()) / (std + 1.0e-6)
+    return values - values.mean()
 
 
 def group_relative_rewards_and_advantages(
