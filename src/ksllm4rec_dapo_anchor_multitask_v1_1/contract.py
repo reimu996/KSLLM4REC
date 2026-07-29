@@ -1,0 +1,171 @@
+"""Frozen contract for DAPO-Anchor-Multitask V1.1 exact two-epoch training."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from types import MappingProxyType
+
+
+SCHEMA_VERSION = 4
+SPEC_VERSION = "DAPO-ANCHOR-MULTITASK-V1.1-E2"
+PROFILE = "frontier_sft372_dapo_anchor_multitask_v1_1_e2"
+
+PROJECT_ROOT = Path("/home/lyc/REC_PROJECTS/KSLLM4REC")
+BASE_MODEL = Path("/home/lyc/models/OneReason-0.8B-pretrain-competition")
+SOURCE_DATA = Path(
+    "/home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/train.jsonl"
+)
+PROVENANCE = Path(
+    "/home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/provenance.jsonl"
+)
+RECOMMENDATION_GROUPS_DIR = (
+    PROJECT_ROOT / "artifacts/grpo/data/recommend_groups_frontier_v1"
+)
+TEXT_TO_SID_GROUPS_DIR = (
+    PROJECT_ROOT / "artifacts/grpo/data/text_to_sid_groups_frontier_v1"
+)
+TRIE_DIR = (
+    PROJECT_ROOT
+    / "artifacts/grpo/catalog/frontier_all_system_prompt_response_sids_v1"
+)
+FIXED_PROBE = (
+    PROJECT_ROOT / "artifacts/grpo/data/frontier_probe_v1/fixed_probe_1024.jsonl"
+)
+RECOVERY_AUDIT_ROOT = (
+    PROJECT_ROOT / "artifacts/rloo/audits/dapo_anchor_multitask_v1_1_e2"
+)
+
+BASE_MODEL_SHA256 = "28e66d2ec528473d335ede2b3faa08eddc53eb8ec93747a449e5e7ec812ede90"
+BASE_MODEL_TREE_SHA256 = "e53f31ed3bcee5b9aa302aa64bf6b4634fa341e0ee66ea4d5f112f6b129c9bca"
+SFT_ADAPTER_TREE_SHA256 = "fd284b4316b39124e39920b3663314aee94067884e59425438e3227a6b2ec580"
+TOKENIZER_TREE_SHA256 = "1f792e07f80143079986db020c6a63b03ceb5cf8ba1da71e322a70dc374b59c8"
+SOURCE_DATA_SHA256 = "9e3465cedbdaf784ab4720699649c76c256414e2c2089efcd7657f63bae7449a"
+PROVENANCE_SHA256 = "e56dddff865780273573e06e5a44d4c1dd9a27013c78c166aa6565f7b9ad8908"
+RECOMMENDATION_GROUPS_SHA256 = (
+    "a2571d97e4ac231d61d1f468bc23b8e65bebfd5ad7b1a2dd566f1bfd86a9658e"
+)
+RECOMMENDATION_MANIFEST_SHA256 = (
+    "34477a35ec1ef06800241a7d7e271af95ff19a486d3feeb18a77ee223f49e647"
+)
+TEXT_TO_SID_GROUPS_SHA256 = (
+    "5dd1c4fd85ed97905a349214e762c4bc47b4a991f4fd93ffed922002235c3eab"
+)
+TEXT_TO_SID_MANIFEST_SHA256 = (
+    "b4c1840923511c30f2eba266e1743d8f8babde988e26d0e8df5cc8a1e1c9118f"
+)
+TRIE_MANIFEST_SHA256 = (
+    "f51414b13a8982605ebe1f7fec75929245db60c854e3860d3b6c1625a3f33e4a"
+)
+FIXED_PROBE_SHA256 = (
+    "86e050a00506efbaef0e49997ed138462aaddc322eba9fc66227a25654a75e5e"
+)
+
+EXPECTED_SOURCE_ROWS = 63_700
+EXPECTED_RECOMMENDATION_GROUPS = 17_016
+EXPECTED_RECOMMENDATION_POSITIVE_EDGES = 30_465
+EXPECTED_RECOMMENDATION_UNIQUE_SIDS = 29_414
+EXPECTED_TEXT_RAW_ROWS = 13_353
+EXPECTED_TEXT_GROUPS = 10_597
+EXPECTED_TEXT_POSITIVE_EDGES = 10_597
+EXPECTED_TEXT_UNIQUE_SIDS = 10_577
+EXPECTED_TEXT_MULTI_GT_GROUPS = 0
+EXPECTED_TRIE_LEAVES = 905_469
+EXPECTED_DOMAIN_A_NODES = 10_744
+EXPECTED_DOMAIN_AB_NODES = 429_540
+
+POLICY_ADAPTER_NAME = "default"
+LORA_RANK = 64
+LORA_ALPHA = 64
+LORA_DROPOUT = 0.0
+LORA_TARGET_MODULES = frozenset(
+    {"q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"}
+)
+EXPECTED_LORA_TENSOR_COUNT = 392
+EXPECTED_LORA_PARAMETER_COUNT = 40_370_176
+SFT372_ADAPTER = (
+    PROJECT_ROOT
+    / "artifacts/sft/platform_exports/"
+    "frontier_LORA_6464_000015_正则0001/checkpoint-372/"
+    "train-task-tw1g09-1784715567-epoch2"
+)
+
+GROUP_SIZE = 16
+PROMPT_BATCH_SIZE = 8
+MAX_ACTIVE_SEQUENCES = 16
+CANDIDATES_PER_PROMPT_WAVE = 2
+LOSS_CHUNK_SIZE = 8
+MIN_EFFECTIVE_GROUPS_PER_UPDATE = 32
+MINIBATCH_GROUPS = 8
+NUM_ITERATIONS = 1
+SOURCE_BLOCKS = 532
+SOURCE_EPOCHS = 2
+SOURCE_GROUPS_PER_EPOCH = EXPECTED_RECOMMENDATION_GROUPS + EXPECTED_TEXT_GROUPS
+TOTAL_SOURCE_GROUPS = SOURCE_GROUPS_PER_EPOCH * SOURCE_EPOCHS
+TOTAL_SOURCE_BLOCKS = SOURCE_BLOCKS * SOURCE_EPOCHS
+TOTAL_CANDIDATES = TOTAL_SOURCE_GROUPS * GROUP_SIZE
+
+TEMPERATURE = 1.2
+CLIP_RATIO_LOW = 0.8
+CLIP_RATIO_HIGH = 1.28
+SAMPLE_CANONICAL_MAX_LOGP_DIFF = 5.0e-3
+CANONICAL_REPLAY_MAX_LOGP_DIFF = 1.0e-5
+
+POLICY_ADAPTER = "default"
+ATTENTION = "flash_attention_2"
+DTYPE = "bfloat16"
+DISABLE_DROPOUT = True
+GRADIENT_CHECKPOINTING = True
+
+NEW_REWARD_VALUES = MappingProxyType(
+    {
+        "exact": 1.0,
+        "same_ab": 0.15,
+        "same_a": 0.05,
+        "same_domain": 0.01,
+        "other_domain": 0.0,
+    }
+)
+OLD_REWARD_VALUES = MappingProxyType(
+    {
+        "exact": 1.0,
+        "same_ab": 0.40,
+        "same_a": 0.15,
+        "same_domain": 0.01,
+        "other_domain": 0.0,
+    }
+)
+
+ANCHOR_TARGET_GRADIENT_RATIO = 0.10
+ANCHOR_MAX_WEIGHT = 0.05
+ANCHOR_GT_COMPLETION_MICROBATCH = 8
+ANCHOR_GRADIENT_EPSILON = 1.0e-12
+
+LEARNING_RATE = 1.0e-6
+WARMUP_POLICY_STEPS = 40
+WARMUP_STEPS_PER_LEVEL = 4
+MAX_GRAD_NORM = 1.0
+
+KV_CACHE_BUDGET_GIB = 12.0
+MAX_RESERVED_GIB = 20.0
+MODEL_NUM_LAYERS = 28
+MODEL_NUM_KV_HEADS = 8
+MODEL_HEAD_DIM = 128
+MODEL_CACHE_DTYPE_BYTES = 2
+MAX_COMPLETION_LENGTH = 32
+MAX_OBSERVED_PROMPT_LENGTH = 2_929
+
+EVALUATION_CANDIDATES = 64
+CHECKPOINT_SOURCE_BLOCK_INTERVAL = 25
+EXPERIMENT_ARMS = ("A", "B", "C", "D")
+
+EXECUTION_DEVICE = "cuda:0"
+EXECUTION_CUDA_VISIBLE_DEVICES = "0"
+EXPECTED_GPU_IDENTITY = MappingProxyType(
+    {
+        "device": EXECUTION_DEVICE,
+        "name": "NVIDIA GeForce RTX 4090",
+        "uuid": "e1f24bb9-9bcb-c31f-52ba-fb5f63a146d5",
+        "total_memory": 25_756_696_576,
+        "compute_capability": [8, 9],
+    }
+)

@@ -1,0 +1,151 @@
+schema_version: 4
+spec_version: DAPO-ANCHOR-MULTITASK-V1.1-E2
+profile: frontier_sft372_dapo_anchor_multitask_v1_1_e2
+model:
+  base_model: /home/lyc/models/OneReason-0.8B-pretrain-competition
+  sft_adapter: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/platform_exports/frontier_LORA_6464_000015_正则0001/checkpoint-372/train-task-tw1g09-1784715567-epoch2
+  tokenizer: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/platform_exports/frontier_LORA_6464_000015_正则0001/checkpoint-372/train-task-tw1g09-1784715567-epoch2
+  policy_adapter: default
+  attention: flash_attention_2
+  dtype: bfloat16
+  disable_dropout: true
+  lora_rank: 64
+  lora_alpha: 64
+  lora_dropout: 0.0
+data:
+  source: /home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/train.jsonl
+  provenance: /home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/provenance.jsonl
+  recommendation_groups: 17016
+  recommendation_positives: 30465
+  text_to_sid_raw_rows: 13353
+  text_to_sid_groups: 10597
+  text_to_sid_positives: 10597
+  source_blocks: 532
+  cutoff_len: 16384
+  prompt_mode: direct_no_think
+trie:
+  strategy: frontier_all_system_prompt_response_sids
+  unique_sids: 905469
+  domain_a_nodes: 10744
+  domain_ab_nodes: 429540
+rollout:
+  temperature: 1.2
+  prompt_batch_size: 8
+  max_active_sequences: 16
+  candidates_per_prompt_wave: 2
+  sample_canonical_max_logp_difference: 0.005
+  canonical_replay_max_logp_difference: 0.00001
+  num_generations: 16
+  max_completion_length: 32
+  do_sample: true
+  num_beams: 1
+  top_k: 0
+  top_p: 1.0
+  retain_duplicates: true
+  use_kv_cache: true
+  kv_cache_budget_gib: 12.0
+  kv_cache_dtype: bfloat16
+  cache_fallback: uncached_single_prompt
+  replay_buffer: false
+  num_iterations: 1
+  policy_snapshot: shared_until_optimizer_window_commit
+  rng_namespaces:
+    - recommendation
+    - item_text_to_sid
+sampling:
+  source_blocks: 532
+  minimum_effective_groups_per_update: 32
+  filter: reward_range_positive
+  overflow: retain_all
+  replenishment: false
+  source_repeats: false
+  shuffle: sha256_seed_epoch_task_group_id
+  epoch_boundary_flush: true
+reward:
+  exact: 1.0
+  same_ab: 0.4
+  same_a: 0.15
+  same_domain: 0.01
+  other_domain: 0.0
+loss:
+  objective: dapo_multitask_asymmetric_clip
+  reference_free: true
+  decision_tokens_only: true
+  aggregation: minibatch_decision_token_mean
+  clip_ratio_low: 0.8
+  clip_ratio_high: 1.28
+  minibatch_groups: 8
+anchor:
+  target: negative_log_gt_set_probability_mass
+  routes:
+    - all_normalized_groups
+  coverage: all_normalized_groups_once_per_epoch
+  independent_optimizer_step: false
+  merge_into: final_policy_optimizer_step
+  carry_without_rl: true
+  final_auxiliary_flush: true
+  target_gradient_ratio: 0.1
+  max_weight: 0.05
+  gradient_epsilon: 0.000000000001
+  gt_completion_microbatch: 8
+  teacher_forcing_temperature: 1.0
+  replay_max_logp_difference: 0.00001
+  use_kv_cache: false
+train:
+  seed: 42
+  source_epochs: 2
+  learning_rate: 0.000001
+  weight_decay: 0.0
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_epsilon: 0.00000001
+  max_grad_norm: 1.0
+  scheduler: constant_after_policy_step_warmup
+  warmup_policy_steps: 40
+  warmup_steps_per_level: 4
+  scheduler_step_unit: policy_optimizer_step
+  gradient_checkpointing: true
+  bf16: true
+  tf32: true
+  checkpoint_source_blocks: 25
+  retain_recovery_checkpoints: 2
+  num_iterations: 1
+memory:
+  loss_chunk_size: 8
+  max_reserved_gib: 20.0
+  kv_cache_budget_gib: 12.0
+  model_num_layers: 28
+  model_num_kv_heads: 8
+  model_head_dim: 128
+  cache_dtype_bytes: 2
+  max_observed_prompt_length: 2929
+evaluation:
+  fixed_probe: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/data/frontier_probe_v1/fixed_probe_1024.jsonl
+  num_candidates: 64
+  require_unique_candidates: true
+  do_sample: false
+  max_completion_length: 32
+  formal_authority:
+    - R0
+    - R2
+    - total
+experiments:
+  arms:
+    - A
+    - B
+    - C
+    - D
+  active:
+    arm: D
+    recommendation_enabled: true
+    text_to_sid_enabled: true
+    reward_profile: old
+  local_text_sid_pass64_min_delta: 0.0
+  local_recommend_sid_pass64_max_drop: 0.005
+  formal_r2_max_drop: 0.005
+output:
+  recommendation_groups_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/data/recommend_groups_frontier_v1
+  text_to_sid_groups_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/data/text_to_sid_groups_frontier_v1
+  trie_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/catalog/frontier_all_system_prompt_response_sids_v1
+  run_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/rloo/runs/dapo_anchor_multitask_sft372_v1_1_e2_arm_d
+  log_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/operation_logs/rloo/dapo_anchor_multitask_sft372_v1_1_e2_arm_d
