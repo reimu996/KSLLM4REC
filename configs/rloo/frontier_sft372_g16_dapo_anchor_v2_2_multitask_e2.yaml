@@ -1,0 +1,136 @@
+schema_version: 2
+spec_version: DAPO-ANCHOR-V2.2-MULTITASK-E2
+profile: frontier_sft372_dapo_anchor_v2_2_multitask_e2
+
+model:
+  base_model: /home/lyc/models/OneReason-0.8B-pretrain-competition
+  sft_adapter: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/platform_exports/frontier_LORA_6464_000015_正则0001/checkpoint-372/train-task-tw1g09-1784715567-epoch2
+  tokenizer: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/sft/platform_exports/frontier_LORA_6464_000015_正则0001/checkpoint-372/train-task-tw1g09-1784715567-epoch2
+  policy_adapter: default
+  attention: flash_attention_2
+  dtype: bfloat16
+  disable_dropout: true
+  lora_rank: 64
+  lora_alpha: 64
+  lora_dropout: 0.0
+
+data:
+  source: /home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/train.jsonl
+  provenance: /home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/provenance.jsonl
+  tasks:
+    - recommendation
+    - item_text_to_sid
+  recommendation_groups: 17016
+  recommendation_positives: 30465
+  text_to_sid_groups: 10597
+  text_to_sid_positives: 10597
+  groups: 27613
+  cutoff_len: 16384
+  prompt_mode: direct_no_think
+
+trie:
+  strategy: frontier_all_system_prompt_response_sids
+  unique_sids: 905469
+  domain_a_nodes: 10744
+  domain_ab_nodes: 429540
+
+rollout:
+  num_generations: 16
+  prompt_batch_size: 8
+  max_active_sequences: 16
+  candidates_per_prompt_wave: 2
+  max_completion_length: 32
+  do_sample: true
+  num_beams: 1
+  temperature: 1.2
+  top_k: 0
+  top_p: 1.0
+  retain_duplicates: true
+  use_kv_cache: true
+  kv_cache_budget_gib: 12.0
+  kv_cache_dtype: bfloat16
+  cache_fallback: uncached_single_prompt
+  sample_canonical_max_logp_difference: 0.005
+  canonical_replay_max_logp_difference: 0.00001
+  replay_buffer: false
+  num_iterations: 1
+
+sampling:
+  effective_groups_per_window: 32
+  filter: reward_range_positive
+  anchor_candidate: reward_flat_and_no_exact
+  anchor_candidate_selection: all
+  overflow: drop_and_audit
+  shuffle_complete_groups: true
+  max_unique_prompts_per_window: 27613
+  source_order: sha256_cycle_permutation
+
+loss:
+  objective: dapo_anchor_v2_2_asymmetric_clip
+  reference_free: true
+  decision_tokens_only: true
+  aggregation: minibatch_decision_token_mean
+  clip_ratio_low: 0.8
+  clip_ratio_high: 1.28
+  minibatch_groups: 8
+
+anchor:
+  target: negative_log_gt_set_probability_mass
+  all_candidates: true
+  optimizer_steps_per_window_max: 1
+  warmup_windows: 0
+  target_gradient_ratio: 0.10
+  max_weight: 0.05
+  gradient_epsilon: 0.000000000001
+  gt_completion_microbatch: 8
+  teacher_forcing_temperature: 1.0
+  replay_max_logp_difference: 0.00001
+  use_kv_cache: false
+
+train:
+  seed: 42
+  effective_epochs: 2
+  windows_per_effective_epoch: 863
+  total_windows: 1726
+  total_rl_optimizer_updates: 6904
+  max_total_optimizer_updates: 8630
+  rl_optimizer_updates_per_window: 4
+  anchor_optimizer_updates_per_window_max: 1
+  learning_rate: 0.000001
+  weight_decay: 0.0
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_epsilon: 0.00000001
+  max_grad_norm: 1.0
+  scheduler: constant_after_linear_warmup
+  warmup_windows: 10
+  scheduler_step_unit: complete_rollout_window
+  gradient_checkpointing: true
+  bf16: true
+  tf32: true
+  logging_windows: 10
+  resume_save_windows: 25
+  num_iterations: 1
+
+memory:
+  loss_chunk_size: 8
+  max_reserved_gib: 20.0
+  kv_cache_budget_gib: 12.0
+  model_num_layers: 28
+  model_num_kv_heads: 8
+  model_head_dim: 128
+  cache_dtype_bytes: 2
+  max_observed_prompt_length: 2929
+
+evaluation:
+  fixed_probe: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/data/frontier_probe_v1/fixed_probe_1024.jsonl
+  num_beams: 16
+  do_sample: false
+  max_completion_length: 32
+
+output:
+  recommendation_groups_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/data/recommend_groups_frontier_v1
+  text_to_sid_groups_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/data/text_to_sid_groups_frontier_v1
+  trie_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/grpo/catalog/frontier_all_system_prompt_response_sids_v1
+  run_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/rloo/runs/dapo_anchor_v2_2_multitask_sft372_e2
+  log_dir: /home/lyc/REC_PROJECTS/KSLLM4REC/operation_logs/rloo/dapo_anchor_v2_2_multitask_sft372_e2
