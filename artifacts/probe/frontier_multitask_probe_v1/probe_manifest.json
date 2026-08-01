@@ -1,0 +1,29 @@
+{
+  "kind": "frontier_multitask_fixed_probe",
+  "path": "/home/lyc/REC_PROJECTS/KSLLM4REC/artifacts/probe/frontier_multitask_probe_v1/fixed_probe_1024.jsonl",
+  "provenance": {
+    "path": "/home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/provenance.jsonl",
+    "sha256": "e56dddff865780273573e06e5a44d4c1dd9a27013c78c166aa6565f7b9ad8908",
+    "size": 95110009
+  },
+  "source": {
+    "path": "/home/lyc/Data/frontier_feedbackcore_listwise_invariant_v1/train.jsonl",
+    "sha256": "9e3465cedbdaf784ab4720699649c76c256414e2c2089efcd7657f63bae7449a",
+    "size": 269105772
+  },
+  "records": 1024,
+  "schema_version": 1,
+  "selection": {
+    "algorithm": "sha256(f'{candidate_line}:{raw_record_sha256}') ascending; per-task; single-SID response filter; prompt-level dedup; first COUNTS[task] kept",
+    "count_each": {
+      "recommend": 640,
+      "text_to_sid": 384
+    }
+  },
+  "task_counts": {
+    "recommend": 640,
+    "text_to_sid": 384
+  },
+  "sha256": "1ab0a269e005af0cf6d644548bc42eea84df66fc2d47bbad930af58fba4be551",
+  "size": 4474274
+}
